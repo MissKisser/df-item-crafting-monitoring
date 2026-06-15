@@ -14,6 +14,11 @@ import java.util.Map;
 import java.util.Iterator;
 
 public final class AmsApiClient {
+    /** 与 WebLoginActivity 共用的桌面 Chrome UA，避免被 AMS 判成 WebView 做风控。 */
+    public static final String DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
     private static final String CRAFTING_ENDPOINT =
             "https://comm.ams.game.qq.com/ide/?iChartId=365589&iSubChartId=365589&sIdeToken=bQaMCQ&source=2";
     private static final String USER_LOGIN_ENDPOINT = "https://ams.game.qq.com/ams/userLoginSvr";
@@ -24,18 +29,99 @@ public final class AmsApiClient {
         return AmsProbeResult.fromCraftingBody(body);
     }
 
+    /**
+     * 用浏览器原样的 Cookie 串请求特勤处接口，不经过任何 AmsCredential 改写。
+     * 用于办法 A 验证：WebView 抓到什么 Cookie，就原样发什么。
+     */
+    public AmsProbeResult fetchCraftingWithRawCookie(String rawCookie) throws Exception {
+        String body = post(CRAFTING_ENDPOINT, "", rawCookie);
+        return AmsProbeResult.fromCraftingBody(body);
+    }
+
+    /**
+     * M2 命门验证通道：GET 特勤处接口，带完整浏览器请求头 + ptlogin Cookie + g_tk。
+     *
+     * pvp.qq.com 登录后产出的 p_skey/skey 经 {@link G_tkCalculator} 算出 g_tk，
+     * 作为 CSRF token 拼到 query；Cookie 头原样带上。这是路线 B 的核心链路。
+     *
+     * 与 {@link #fetchCraftingWithRawCookie}（POST 空 body）的对照点：
+     * 方法改 GET、补 Referer/Origin/X-Requested-With/桌面 UA、加 g_tk 参数。
+     *
+     * @param rawCookie ptlogin 域 Cookie（至少含 p_skey 或 skey）
+     * @param gtk       由 p_skey/skey 算出的 g_tk
+     * @return 探针结果；响应体同时保留在 {@link AmsProbeResult#rawBody} 供人眼排查
+     */
+    public AmsProbeResult fetchCraftingWithCookieAndGtk(String rawCookie, int gtk) throws Exception {
+        String url = CRAFTING_ENDPOINT + "&g_tk=" + gtk;
+        String body = getWithCookie(url, rawCookie);
+        return AmsProbeResult.fromCraftingBody(body);
+    }
+
+    /**
+     * 从 "k1=v1; k2=v2" 串里提取 AMS 四元组，构造 AmsCredential。
+     * 找不到的字段返回空串。
+     */
+    public static AmsCredential fromCookieString(String cookieHeader) {
+        Map<String, String> kv = parseCookieString(cookieHeader);
+        String openid = kv.getOrDefault("openid", "");
+        String appid = kv.getOrDefault("appid", "");
+        String accessToken = kv.getOrDefault("access_token", "");
+        String acctype = kv.getOrDefault("acctype", "");
+        return AmsCredential.qq(openid, appid, accessToken);
+    }
+
+    /** 解析 "k1=v1; k2=v2" 为 map，忽略空段。 */
+    static Map<String, String> parseCookieString(String cookieHeader) {
+        Map<String, String> map = new LinkedHashMap<>();
+        if (cookieHeader == null || cookieHeader.isEmpty()) {
+            return map;
+        }
+        for (String part : cookieHeader.split(";")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            int eq = trimmed.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String key = trimmed.substring(0, eq).trim();
+            String value = trimmed.substring(eq + 1).trim();
+            if (!key.isEmpty()) {
+                map.put(key, value);
+            }
+        }
+        return map;
+    }
+
     public String exchangeQqServerSideCode(QqLoginSession session, String appId) throws Exception {
+        Map<String, String> fields = buildQqServerSideExchangeFields(session, appId);
+        return post(USER_LOGIN_ENDPOINT, encodeForm(fields), null);
+    }
+
+    static Map<String, String> buildQqServerSideExchangeFields(QqLoginSession session, String appId) {
         Map<String, String> fields = new LinkedHashMap<>();
-        fields.put("appid", appId);
-        fields.put("miniappid", appId);
-        fields.put("openid", session.openid);
-        fields.put("code", session.accessTokenOrCode);
-        fields.put("access_token", session.accessTokenOrCode);
+        putIfText(fields, "appid", appId);
+        putIfText(fields, "miniappid", appId);
+        putIfText(fields, "client_id", appId);
+        putIfText(fields, "iAppId", appId);
+        putIfText(fields, "appId", appId);
         fields.put("acctype", "qc");
         fields.put("game", "dfm");
         fields.put("gameId", "dfm");
         fields.put("source", "2");
-        return post(USER_LOGIN_ENDPOINT, encodeForm(fields), null);
+        fields.put("format", "json");
+        fields.put("need_pay", "1");
+
+        if (session != null) {
+            for (Map.Entry<String, String> entry : session.callbackFields().entrySet()) {
+                putIfText(fields, entry.getKey(), entry.getValue());
+            }
+            putIfText(fields, "openid", session.openid);
+            putIfText(fields, "code", session.accessTokenOrCode);
+            putIfText(fields, "access_token", session.accessTokenOrCode);
+        }
+        return fields;
     }
 
     public String fetchQqOpenid(String accessToken) throws Exception {
@@ -123,6 +209,39 @@ public final class AmsApiClient {
         return builder.toString();
     }
 
+    /**
+     * 带完整浏览器请求头 + Cookie 的 GET 通道。
+     * M2 命门验证专用：模拟浏览器从 pvp.qq.com 发起的 AJAX 请求。
+     */
+    private static String getWithCookie(String endpoint, String cookie) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
+        connection.setRequestMethod("GET");
+        connection.setConnectTimeout(15000);
+        connection.setReadTimeout(15000);
+        connection.setInstanceFollowRedirects(false);
+        connection.setRequestProperty("User-Agent", DESKTOP_UA);
+        connection.setRequestProperty("Accept", "application/json, text/javascript, */*; q=0.01");
+        connection.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9");
+        connection.setRequestProperty("Referer", "https://pvp.qq.com/");
+        connection.setRequestProperty("Origin", "https://pvp.qq.com");
+        connection.setRequestProperty("X-Requested-With", "XMLHttpRequest");
+        if (cookie != null && !cookie.isEmpty()) {
+            connection.setRequestProperty("Cookie", cookie);
+        }
+
+        int status = connection.getResponseCode();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(
+                status >= 400 ? connection.getErrorStream() : connection.getInputStream(),
+                StandardCharsets.UTF_8
+        ));
+        StringBuilder builder = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            builder.append(line);
+        }
+        return builder.toString();
+    }
+
     private static String encodeForm(Map<String, String> fields) throws Exception {
         StringBuilder builder = new StringBuilder();
         for (Map.Entry<String, String> entry : fields.entrySet()) {
@@ -137,6 +256,12 @@ public final class AmsApiClient {
             builder.append(URLEncoder.encode(entry.getValue(), "UTF-8"));
         }
         return builder.toString();
+    }
+
+    private static void putIfText(Map<String, String> fields, String key, String value) {
+        if (value != null && !value.trim().isEmpty()) {
+            fields.put(key, value);
+        }
     }
 
     private static String firstString(JSONObject root, String... keys) {

@@ -9,6 +9,7 @@ if (localPropsFile.exists()) {
 }
 
 def qqAppId = localProps.getProperty("qq.appId", "")
+def dfWebLoginUrl = localProps.getProperty("df.webLoginUrl", "https://df.qq.com/cp/record202410ver/")
 
 android {
     namespace "com.local.dfcraftmonitor"
@@ -27,6 +28,7 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "QQ_APP_ID", "\"${qqAppId}\""
+        buildConfigField "String", "DF_WEB_LOGIN_URL", "\"${dfWebLoginUrl}\""
         manifestPlaceholders = [
             qqAppId: qqAppId
         ]

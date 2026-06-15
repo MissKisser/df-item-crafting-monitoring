@@ -12,6 +12,9 @@ public final class SecretRedactor {
         if (session != null) {
             redacted = replace(redacted, session.openid);
             redacted = replace(redacted, session.accessTokenOrCode);
+            for (String value : session.callbackFields().values()) {
+                redacted = replace(redacted, value);
+            }
         }
         return redacted;
     }

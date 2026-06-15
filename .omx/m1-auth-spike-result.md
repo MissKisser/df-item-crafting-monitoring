@@ -107,12 +107,42 @@ comm.ams.game.qq.com/ide:
 ret=101, iRet=101, sMsg=非常抱歉，请先登录！
 ```
 
-结论：当前二维码登录返回的 `access_token` 不是 QQ OpenAPI 可用 token，也不能直接换出 AMS credential。当前测试机没有安装 `com.tencent.mobileqq`，普通 `Tencent.login` 只进入“下载 QQ”页面，因此还不能完成普通 QQ 客户端 SSO 登录验证。
+当前二维码登录返回的 `access_token` 不是 QQ OpenAPI 可用 token；按现有请求方式调用 `userLoginSvr` 后，未换出 AMS credential。
 
-下一步硬性前置：
+安装并登录最新版 QQ 后，普通客户端授权路径进入 QQ 客户端授权页。用户点击「同意」后，页面返回以下错误：
 
-1. 在测试机安装并登录最新版 QQ，再走“QQ 普通登录对照”。
-2. 或者替换为自己申请、已绑定当前包名和签名的 QQ 互联 Android AppID。
+```text
+登录失败
+该应用非官方正版应用，请去相应官网下载正版后进行QQ登录。
+```
+
+本地调试包 `com.local.dfcraftmonitor` 未收到该路径的授权回调。
+
+清理 QQ 客户端状态后，`loginServerSide(..., qrcode=true)` 可进入 APP 内 WebView 二维码页：
+
+```text
+QQ 授权登录
+使用QQ手机版扫码授权登录
+```
+
+同意授权前，本地 WebView 观测到以下 QQ 二维码登录会话 cookie：
+
+```text
+.ptlogin2.qq.com | qrsig | len=128
+.ptlogin2.qq.com | pt_login_sig | len=64
+.ptlogin2.qq.com | uikey | len=64
+.ptlogin2.qq.com | pt_local_token | len=11
+```
+
+本地 WebView 存储中未发现 `openid`、`access_token`、`code`、`pay_token`、`pfkey` 等可提交给 AMS 或 `userLoginSvr` 的票据字段。
+
+## 当前状态
+
+1. 已定位特勤处制造状态接口，并已用小程序现有登录态验证接口可返回四项制造数据。
+2. Android 原型可进入 QQ WebView 二维码授权页。
+3. 普通 QQ 客户端授权在「同意」后返回「该应用非官方正版应用」错误，本地 APP 未收到授权回调。
+4. WebView 二维码页当前仅观测到 QQ 二维码会话 cookie，未观测到 AMS 可用票据字段。
+5. `userLoginSvr` 交换和直接构造 `qc` Cookie 两条链路当前均未通过，AMS 仍返回未登录。
 
 ## 配置说明
 
@@ -128,5 +158,3 @@ local.properties
 sdk.dir=C\:\\Users\\missk\\AppData\\Local\\Android\\Sdk
 qq.appId=1110543085
 ```
-
-正式公开版应替换为自己申请的 QQ 互联 Android 应用 AppID，并绑定包名与签名。

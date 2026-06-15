@@ -9,6 +9,7 @@ app/build/
 third_party/
 
 .omc/
+.omx/external/
 .omx/m0/private/
 .omx/m0/code/
 .omx/m0/*.png
@@ -19,6 +20,9 @@ third_party/
 .omx/m0/dumpsys-*.txt
 .omx/state/
 *.bin
+
+# 临时调试截图
+.omx/*.png
 
 captures/
 logs/
