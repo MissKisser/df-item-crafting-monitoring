@@ -21,7 +21,7 @@ app/libs/
 
 # 临时调试产物
 .omx/*.png            # 根目录临时截图
-.omx/upscale.ps1      # 临时 powershell 脚本
+.omx/*.ps1            # 临时 powershell 脚本
 .omx/df_*.png         # M3 期间调试截图前缀
 
 # 调研期 M0 临时产物（.md 决策文档和 .json 脱敏数据保留）
