@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 /**
@@ -119,5 +120,54 @@ class AmsCraftingParserTest {
         assertEquals("FOUND", s.itemName)
         assertEquals("P", s.iconUrl)
         assertEquals(99L, s.avgPrice)
+    }
+
+    // ---- AuthExpiredException 识别（spec 9.3 退避表） ----
+
+    @Test(expected = AmsCraftingParser.AuthExpiredException::class)
+    fun retNonZeroWithLoginKeywordThrowsAuthExpired() {
+        val body = """{"ret":-1,"sMsg":"您还没有登录","iRet":-1}"""
+        AmsCraftingParser.parse(body)
+    }
+
+    @Test(expected = AmsCraftingParser.AuthExpiredException::class)
+    fun retNonZeroWithNotLoggedInKeywordThrowsAuthExpired() {
+        val body = """{"ret":-1,"sMsg":"用户未登录","iRet":-1}"""
+        AmsCraftingParser.parse(body)
+    }
+
+    @Test(expected = AmsCraftingParser.AuthExpiredException::class)
+    fun retNonZeroWithExpiredKeywordThrowsAuthExpired() {
+        val body = """{"ret":-1,"sMsg":"授权已过期","iRet":-1}"""
+        AmsCraftingParser.parse(body)
+    }
+
+    @Test(expected = RuntimeException::class)
+    fun retNonZeroWithGenericMessageThrowsRuntimeException() {
+        // 不是登录/未登录/授权/失效 类消息 → 通用 RuntimeException
+        val body = """{"ret":-1,"sMsg":"系统繁忙","iRet":-1}"""
+        AmsCraftingParser.parse(body)
+    }
+
+    @Test
+    fun retNonZeroFallsBackToMsgKeyIfNoSMsg() {
+        val body = """{"ret":-1,"msg":"未登录"}"""
+        try {
+            AmsCraftingParser.parse(body)
+            fail("应该抛 AuthExpiredException")
+        } catch (e: AmsCraftingParser.AuthExpiredException) {
+            assertTrue(e.message!!.contains("未登录"))
+        }
+    }
+
+    @Test
+    fun authExpiredExceptionMessageIncludesAMSServerText() {
+        val body = """{"ret":-1,"sMsg":"请重新登录"}"""
+        try {
+            AmsCraftingParser.parse(body)
+            fail()
+        } catch (e: AmsCraftingParser.AuthExpiredException) {
+            assertTrue("消息应包含 '请重新登录'", e.message!!.contains("请重新登录"))
+        }
     }
 }

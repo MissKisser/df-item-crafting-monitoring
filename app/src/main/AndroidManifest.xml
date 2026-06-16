@@ -2,6 +2,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Android 13+ 运行时通知权限（spec 7.4/9.1） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 设备重启后恢复 WorkManager 周期同步（spec 12.4 可靠性） -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".DfApp"
@@ -20,5 +24,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 通知按钮触发的 receiver（spec 7.4 暂停/打开/重新登录 快捷操作） -->
+        <receiver
+            android:name=".notify.NotificationActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.local.dfcraftmonitor.notify.PAUSE_SYNC" />
+                <action android:name="com.local.dfcraftmonitor.notify.RESUME_SYNC" />
+                <action android:name="com.local.dfcraftmonitor.notify.RELOGIN" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

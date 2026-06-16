@@ -19,8 +19,26 @@ import org.json.JSONObject
  * 纯函数式、可单测，无 Android 依赖。
  */
 object AmsCraftingParser {
+    /**
+     * AMS 鉴权失效信号。
+     * 当接口返回 ret != 0 且 sMsg 含登录/未登录/授权 等关键词时，
+     * Worker 应停止周期同步、通知用户重新登录（spec 9.3 / 11.1）。
+     */
+    class AuthExpiredException(message: String) : RuntimeException(message)
+
     fun parse(body: String): CraftingSnapshot {
         val root = JSONObject(body)
+        // 在深入解析前先看顶层 ret/iRet/sMsg；ret != 0 时是接口级错误。
+        val ret = root.optInt("ret", 0)
+        val sMsg = root.optString("sMsg", root.optString("msg", ""))
+        if (ret != 0) {
+            val text = sMsg.ifEmpty { "AMS ret=$ret" }
+            if (AUTH_EXPIRED_KEYWORDS.any { it in text }) {
+                throw AuthExpiredException("登录已失效：$text")
+            }
+            throw RuntimeException("AMS 接口错误：$text")
+        }
+
         val payload = root
             .getJSONObject("jData")
             .getJSONObject("data")
@@ -64,4 +82,6 @@ object AmsCraftingParser {
         if (!json.has(key) || json.isNull(key)) return null
         return json.optLong(key)
     }
+
+    private val AUTH_EXPIRED_KEYWORDS = listOf("登录", "未登录", "授权", "已过期", "失效")
 }

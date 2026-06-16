@@ -1,5 +1,9 @@
 package com.local.dfcraftmonitor.ui.home
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,24 +33,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
 import com.local.dfcraftmonitor.data.model.CraftingStation
+import com.local.dfcraftmonitor.ui.permission.NotificationPermissionState
+import com.local.dfcraftmonitor.ui.permission.NotificationPermissionStatus
 import kotlinx.coroutines.delay
 
 /**
- * 主界面：账号状态 + 工位卡片列表 + 倒计时 + 下拉刷新（按钮形式）。
+ * 主界面：账号状态 + 工位卡片列表 + 倒计时 + 下拉刷新 + 通知权限 Banner。
  *
- * 倒计时策略：每秒 tick 一次，本地重新计算 "剩余 N 秒"（基于 snapshot 内
- * 的服务器时间，不依赖客户端时间，避免本机时钟漂移影响显示）。
+ * spec M2 增强：
+ * - 通知权限被拒时显示 Banner 提示
+ * - 登录失效（AuthExpired）时显示"重新登录"按钮
+ * - 进入时申请通知权限（Android 13+）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,6 +64,26 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // 通知权限状态：进入页面时查一次，权限申请后回调时再查一次
+    var permissionStatus by remember {
+        mutableStateOf(NotificationPermissionState.check(context))
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { _ ->
+        permissionStatus = NotificationPermissionState.check(context)
+    }
+
+    // Android 13+ 且未授权时，进入页面就申请一次
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            permissionStatus != NotificationPermissionStatus.GRANTED
+        ) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -70,24 +101,97 @@ fun HomeScreen(
             )
         },
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when (val s = state) {
-                HomeViewModel.UiState.Loading -> Center { CircularProgressIndicator() }
-                HomeViewModel.UiState.NotLoggedIn -> Center { Text("未登录") }
-                is HomeViewModel.UiState.Error -> Center { Text("错误：${s.message}") }
-                is HomeViewModel.UiState.Success -> SnapshotContent(s.snapshot)
+            // 通知权限 Banner：被拒时显示（spec 11.1 "通知权限关闭"）
+            if (permissionStatus == NotificationPermissionStatus.DENIED ||
+                permissionStatus == NotificationPermissionStatus.PERMANENTLY_DENIED
+            ) {
+                NotificationPermissionBanner(
+                    onRequestAgain = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
+                )
+            }
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (val s = state) {
+                    HomeViewModel.UiState.Loading -> Center { CircularProgressIndicator() }
+                    HomeViewModel.UiState.NotLoggedIn -> Center { Text("未登录") }
+                    is HomeViewModel.UiState.Error -> Center { Text("错误：${s.message}") }
+                    is HomeViewModel.UiState.AuthExpired -> AuthExpiredPanel(
+                        reason = s.reason,
+                        onReLogin = viewModel::onAuthExpired,
+                    )
+                    is HomeViewModel.UiState.Success -> SnapshotContent(s.snapshot)
+                }
             }
         }
     }
 }
 
 @Composable
+private fun NotificationPermissionBanner(onRequestAgain: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                "通知权限未开启",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                "将接收不到制造完成提醒。后台同步仍在运行。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Button(
+                onClick = onRequestAgain,
+                modifier = Modifier.padding(top = 8.dp),
+            ) {
+                Text("重新申请")
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthExpiredPanel(reason: String, onReLogin: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            "登录已失效",
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Text(
+            reason,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
+        )
+        Button(onClick = onReLogin) {
+            Text("重新登录")
+        }
+    }
+}
+
+@Composable
 private fun SnapshotContent(snapshot: CraftingSnapshot) {
-    // 每秒 tick：本机当前时间，用于倒计时显示。
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(snapshot.serverNowEpochSeconds) {
         while (true) {
@@ -159,7 +263,6 @@ private fun formatRemaining(
     nowMillis: Long,
 ): String {
     val finishSec = station.finishAtEpochSeconds ?: return "-"
-    // 服务器时间到本机时间的偏移：本机 nowMillis 对应 serverNowSeconds
     val serverNowMillis = serverNowSeconds * 1000L
     val offset = nowMillis - serverNowMillis
     val remaining = (finishSec * 1000L - (serverNowMillis + offset)) / 1000L
