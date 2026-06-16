@@ -5,6 +5,7 @@ import com.local.dfcraftmonitor.data.model.CraftingStation
 import com.local.dfcraftmonitor.data.remote.AmsCraftingParser
 import com.local.dfcraftmonitor.data.repository.CraftingRepository
 import com.local.dfcraftmonitor.ui.login.SessionHolder
+import com.local.dfcraftmonitor.widget.WidgetRefresher
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,6 +32,7 @@ class SyncCoordinator @Inject constructor(
     private val completionNotifier: com.local.dfcraftmonitor.notify.CompletionNotifier,
     private val monitoringNotifier: com.local.dfcraftmonitor.notify.MonitoringNotifier,
     private val authNotifier: com.local.dfcraftmonitor.notify.AuthNotifier,
+    private val widgetRefresher: WidgetRefresher,
 ) {
     suspend fun syncOnce(): SyncOutcome {
         val credential = sessionHolder.get()
@@ -51,7 +53,7 @@ class SyncCoordinator @Inject constructor(
         return SyncOutcome.Unknown
     }
 
-    private fun handleSuccess(newSnapshot: CraftingSnapshot) {
+    private suspend fun handleSuccess(newSnapshot: CraftingSnapshot) {
         val oldSnapshot = snapshotCache.load()
         if (oldSnapshot != null) {
             val completed = SyncDiff.completed(oldSnapshot, newSnapshot)
@@ -61,6 +63,8 @@ class SyncCoordinator @Inject constructor(
         }
         monitoringNotifier.notifyMonitoring(newSnapshot)
         snapshotCache.save(newSnapshot)
+        // 刷新桌面卡片（spec 8.1：同步成功后更新 widget）
+        widgetRefresher.refresh()
     }
 
     private fun handleFailure(e: Throwable): SyncOutcome = when (e) {

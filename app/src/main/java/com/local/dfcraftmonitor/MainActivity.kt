@@ -18,6 +18,8 @@ import androidx.navigation.compose.rememberNavController
 import com.local.dfcraftmonitor.ui.home.HomeScreen
 import com.local.dfcraftmonitor.ui.login.LoginScreen
 import com.local.dfcraftmonitor.ui.login.SessionHolder
+import com.local.dfcraftmonitor.ui.privacy.PrivacyScreen
+import com.local.dfcraftmonitor.ui.settings.SettingsScreen
 import com.local.dfcraftmonitor.ui.theme.DfCraftingTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -48,6 +50,8 @@ class MainActivity : ComponentActivity() {
 private object Routes {
     const val LOGIN = "login"
     const val HOME = "home"
+    const val SETTINGS = "settings"
+    const val PRIVACY = "privacy"
 }
 
 @androidx.compose.runtime.Composable
@@ -66,7 +70,29 @@ private fun DfNavGraph(sessionHolder: SessionHolder) {
             )
         }
         composable(Routes.HOME) {
-            HomeScreen()
+            HomeScreen(
+                onNavigateToSettings = {
+                    navController.navigate(Routes.SETTINGS)
+                },
+            )
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                onNavigateToPrivacy = {
+                    navController.navigate(Routes.PRIVACY)
+                },
+                onLogout = {
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.PRIVACY) {
+            PrivacyScreen(
+                onBack = { navController.popBackStack() },
+            )
         }
     }
 }

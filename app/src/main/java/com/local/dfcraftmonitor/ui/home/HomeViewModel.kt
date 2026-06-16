@@ -6,6 +6,7 @@ import com.local.dfcraftmonitor.data.model.CraftingSnapshot
 import com.local.dfcraftmonitor.data.remote.AmsCraftingParser
 import com.local.dfcraftmonitor.data.repository.CraftingRepository
 import com.local.dfcraftmonitor.ui.login.SessionHolder
+import com.local.dfcraftmonitor.widget.WidgetRefresher
 import com.local.dfcraftmonitor.work.WorkScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,7 @@ class HomeViewModel @Inject constructor(
     private val craftingRepository: CraftingRepository,
     private val sessionHolder: SessionHolder,
     private val workScheduler: WorkScheduler,
+    private val widgetRefresher: WidgetRefresher,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<UiState>(UiState.Loading)
@@ -42,7 +44,11 @@ class HomeViewModel @Inject constructor(
         _state.value = UiState.Loading
         viewModelScope.launch {
             craftingRepository.fetchCrafting(credential)
-                .onSuccess { _state.value = UiState.Success(it) }
+                .onSuccess {
+                    _state.value = UiState.Success(it)
+                    // 刷新桌面卡片（spec 8.1：手动刷新成功后更新 widget）
+                    widgetRefresher.refresh()
+                }
                 .onFailure { e ->
                     _state.value = when (e) {
                         is AmsCraftingParser.AuthExpiredException ->
