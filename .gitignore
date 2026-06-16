@@ -1,28 +1,45 @@
+# Build 产物
 .gradle/
 .idea/
 build/
-local.properties
+app/build/
 *.iml
 
-app/build/
+# 本地配置（不跟踪）
+local.properties
 
+# 第三方依赖（应放 maven/google 而不是仓库里）
 third_party/
+app/libs/
 
+# 内部工具目录（不属于项目）
 .omc/
-.omx/external/
-.omx/m0/private/
-.omx/m0/code/
-.omx/m0/*.png
-.omx/m0/*.xml
+.omx/state/
+.omx/logs/
+.omx/drafts/
+.omx/external/        # clone 来的第三方仓库不进入本仓库
+
+# 临时调试产物
+.omx/*.png            # 根目录临时截图
+.omx/upscale.ps1      # 临时 powershell 脚本
+.omx/df_*.png         # M3 期间调试截图前缀
+
+# 调研期 M0 临时产物（.md 决策文档和 .json 脱敏数据保留）
+.omx/m0/private/      # 含真实用户 cookie/db（敏感）
+.omx/m0/code/         # 反编译的第三方 JS
+.omx/m0/*.png         # 临时截图
+.omx/m0/*.xml         # UI dump
+.omx/m0/*.log         # 抓包日志
 .omx/m0/*socket*.txt
 .omx/m0/*logcat*.txt
 .omx/m0/events-*.txt
 .omx/m0/dumpsys-*.txt
-.omx/state/
+
+# 敏感数据（通用规则）
 *.bin
-
-# 临时调试截图
-.omx/*.png
-
+*.db
 captures/
 logs/
+
+# 临时二进制
+*.bin
