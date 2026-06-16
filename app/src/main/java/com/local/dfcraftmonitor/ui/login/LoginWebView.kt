@@ -1,39 +1,51 @@
 package com.local.dfcraftmonitor.ui.login
 
+import android.os.Handler
+import android.os.Looper
 import android.os.Message
+import android.util.Log
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.ConsoleMessage
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.local.dfcraftmonitor.data.remote.AmsConstants
 
+private const val TAG = "DfLoginWebView"
+
 /**
- * 内嵌登录 WebView（M3-5）。
+ * 内嵌登录 WebView。
  *
- * 保留 spike 反复验证过的关键配置（这些不能丢）：
- * 1. **setSupportMultipleWindows(true) + WebChromeClient.onCreateWindow**：
- *    pvp.qq.com 登录按钮用 window.open() 弹 ptlogin 登录窗，缺这俩点击就无反应。
- * 2. **桌面 Chrome UA**：避免被 QQ/AMS 风控判成 WebView。
- * 3. **setAcceptThirdPartyCookies(true)**：QQ/微信登录链路依赖第三方 Cookie。
- * 4. **setDomStorageEnabled(true)**：ptlogin 登录页用 localStorage。
+ * 登录流程（pvp.qq.com 页面分析）：
+ * 1. 用户在主页面上看到 [#dologin] 按钮
+ * 2. 点击后弹窗让用户选择登录方式（微信 / QQ）
+ * 3. LoginManager.loginByWXAndQQ() 创建匿名 iframe 加载登录页面
  *
- * 登录成功后通过 [onLoginSuccess] 回调（自动判定，不需用户手点）。
+ * 自动点击 + 登录检测：
+ * - 进入页面后注入 JS，自动调用 initLogin() 触发登录
+ * - Cookie 轮询检测登录完成（不依赖 postMessage）
  */
 @Composable
 fun LoginWebView(
     initialUrl: String,
+    refreshSignal: Int = 0,
     onLoginSuccess: (Map<String, String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
+    var loginDetected by remember { mutableStateOf(false) }
+    var lastRefreshSignal by remember { mutableStateOf(refreshSignal) }
     val harvester = remember { CookieHarvester() }
 
     DisposableEffect(Unit) {
@@ -48,28 +60,60 @@ fun LoginWebView(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
-                configureWebView { cookies ->
-                    if (harvester.isLoginComplete(cookies)) {
-                        onLoginSuccess(cookies)
-                    }
-                }
+                configureWebView(
+                    harvester = harvester,
+                    onCookiesReady = { cookies ->
+                        if (!loginDetected && harvester.isLoginComplete(cookies)) {
+                            loginDetected = true
+                            onLoginSuccess(cookies)
+                        }
+                    },
+                )
                 loadUrl(initialUrl)
+            }
+        },
+        update = { webView ->
+            if (lastRefreshSignal != refreshSignal) {
+                lastRefreshSignal = refreshSignal
+                loginDetected = false
+                webView.loadUrl(initialUrl)
             }
         },
     )
 }
 
 /**
- * 配置 WebView 的关键参数。保留 spike 反复验证过的 onCreateWindow 内核。
+ * JS Bridge：从 JS 层接收事件，调度到主线程。
+ */
+private class DfLoginBridge(
+    private val webView: WebView,
+) {
+    @JavascriptInterface
+    fun loadPtlogin(url: String) {
+        val normalizedUrl = when {
+            url.startsWith("//") -> "https:$url"
+            else -> url
+        }
+        Log.d(TAG, "JS bridge loading ptlogin: $normalizedUrl")
+        webView.post { webView.loadUrl(normalizedUrl) }
+    }
+
+    @JavascriptInterface
+    fun log(message: String) {
+        Log.d(TAG, "JS: $message")
+    }
+}
+
+/**
+ * 配置 WebView。
  */
 private fun WebView.configureWebView(
-    onPageFinished: (Map<String, String>) -> Unit,
+    harvester: CookieHarvester,
+    onCookiesReady: (Map<String, String>) -> Unit,
 ) {
     settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
-        // window.open 弹窗支持：必须同时 setSupportMultipleWindows(true)
-        // 和提供 WebChromeClient.onCreateWindow，否则点击无反应。
         setSupportMultipleWindows(true)
         javaScriptCanOpenWindowsAutomatically = true
         loadWithOverviewMode = true
@@ -81,18 +125,102 @@ private fun WebView.configureWebView(
     CookieManager.getInstance().setAcceptCookie(true)
     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
+    // 注册 JS Bridge
+    addJavascriptInterface(DfLoginBridge(this), "DfBridge")
+
+    // Cookie 轮询：每 2 秒检查一次
+    val cookiePollHandler = Handler(Looper.getMainLooper())
+    var pollRunnable: Runnable? = null
+    val qrScaleHandler = Handler(Looper.getMainLooper())
+    var scaleRunnable: Runnable? = null
+
+    fun startCookiePolling() {
+        pollRunnable?.let { cookiePollHandler.removeCallbacks(it) }
+        pollRunnable = object : Runnable {
+            override fun run() {
+                CookieManager.getInstance().flush()
+                val c = harvester.harvest()
+                onCookiesReady(c)
+                if (!harvester.isLoginComplete(c)) {
+                    cookiePollHandler.postDelayed(this, 2000)
+                }
+            }
+        }
+        cookiePollHandler.postDelayed(pollRunnable!!, 2000)
+    }
+
+    fun startLoginDialogScaling(view: WebView) {
+        scaleRunnable?.let { qrScaleHandler.removeCallbacks(it) }
+        scaleRunnable = object : Runnable {
+            private var attempts = 0
+            private var scaled = false
+
+            override fun run() {
+                if (scaled) return
+                attempts++
+                view.evaluateJavascript(JS_SCALE_LOGIN_DIALOG) { result ->
+                    if (result == "true") {
+                        scaled = true
+                        qrScaleHandler.removeCallbacks(this)
+                        Log.d(TAG, "visible ptlogin dialog scaled")
+                    }
+                }
+                if (!scaled && attempts < 80) {
+                    qrScaleHandler.postDelayed(this, 250)
+                }
+            }
+        }
+        qrScaleHandler.post(scaleRunnable!!)
+    }
+
     webViewClient = object : WebViewClient() {
+
+        override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+            super.onPageStarted(view, url, favicon)
+            if (url != null && url.contains("pvp.qq.com")) {
+                // 页面开始加载时立即注入早期 hook（在 LoginManager 加载前准备）
+                view.evaluateJavascript(JS_EARLY_HOOK, null)
+            }
+        }
+
+        override fun shouldOverrideUrlLoading(
+            view: WebView,
+            request: WebResourceRequest,
+        ): Boolean {
+            // 不拦截任何 URL，让 WebView 正常加载
+            return false
+        }
+
         override fun onPageFinished(view: WebView, url: String) {
+            super.onPageFinished(view, url)
             CookieManager.getInstance().flush()
-            val harvester = CookieHarvester()
-            onPageFinished(harvester.harvest())
+
+            if (url.contains("pvp.qq.com")) {
+                view.evaluateJavascript(JS_AUTO_LOGIN, null)
+                startLoginDialogScaling(view)
+            }
+
+            if (url.contains("ptlogin2.qq.com")) {
+                view.evaluateJavascript(JS_ENLARGE_QRCODE, null)
+            }
+
+            val cookies = harvester.harvest()
+            onCookiesReady(cookies)
+
+            startCookiePolling()
         }
     }
 
-    // 处理 window.open：ptlogin 登录窗通过 window.open() 打开。
-    // 标准做法：创建临时 transport WebView 满足 window.open 协议，
-    // 在它的 WebViewClient.shouldOverrideUrlLoading 里把首个 URL 转给主 webView。
     webChromeClient = object : WebChromeClient() {
+        override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+            Log.d(
+                TAG,
+                "console: ${consoleMessage.message()} " +
+                    "(${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})",
+            )
+            return super.onConsoleMessage(consoleMessage)
+        }
+
         override fun onCreateWindow(
             view: WebView,
             isDialog: Boolean,
@@ -101,13 +229,53 @@ private fun WebView.configureWebView(
         ): Boolean {
             val transport = WebView(view.context).apply {
                 settings.javaScriptEnabled = true
-            }
-            transport.webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(tv: WebView, url: String): Boolean {
+                settings.domStorageEnabled = true
+                settings.userAgentString = AmsConstants.DESKTOP_UA
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+
+                var ptloginTransferred = false
+                fun transferPtloginToMain(url: String?): Boolean {
+                    if (ptloginTransferred || url == null || !url.contains("ptlogin2.qq.com")) {
+                        return false
+                    }
+                    ptloginTransferred = true
                     view.loadUrl(url)
                     return true
                 }
+
+                webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(
+                        tv: WebView,
+                        url: String?,
+                        favicon: android.graphics.Bitmap?,
+                    ) {
+                        super.onPageStarted(tv, url, favicon)
+                        if (transferPtloginToMain(url)) {
+                            tv.stopLoading()
+                        }
+                    }
+
+                    override fun shouldOverrideUrlLoading(
+                        tv: WebView,
+                        request: WebResourceRequest,
+                    ): Boolean {
+                        return transferPtloginToMain(request.url.toString())
+                    }
+
+                    override fun onPageFinished(tv: WebView, url: String) {
+                        super.onPageFinished(tv, url)
+                        CookieManager.getInstance().flush()
+                        val cookies = harvester.harvest()
+                        onCookiesReady(cookies)
+                    }
+                }
             }
+
+            (view.parent as? ViewGroup)?.addView(
+                transport,
+                ViewGroup.LayoutParams(1, 1),
+            )
+
             val transportWrapper = resultMsg.obj as WebView.WebViewTransport
             transportWrapper.webView = transport
             resultMsg.sendToTarget()
@@ -115,3 +283,507 @@ private fun WebView.configureWebView(
         }
     }
 }
+
+// ========================================================================
+// JS 脚本
+// ========================================================================
+
+/**
+ * 早期 hook：在 LoginManager 加载前准备劫持环境。
+ * 在 onPageStarted 时立即注入，能更早捕获 LoginManager。
+ */
+private const val JS_EARLY_HOOK = """
+(function() {
+    if (window.__dfEarlyHooked) return;
+    window.__dfEarlyHooked = true;
+    window.__dfCapturedLoginSrc = null;
+
+    // 早期劫持：监控 iframe 创建
+    var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            for (var i = 0; i < mutation.addedNodes.length; i++) {
+                var node = mutation.addedNodes[i];
+                var iframes = [];
+                if (node.tagName === 'IFRAME') {
+                    iframes.push(node);
+                }
+                if (node.querySelectorAll) {
+                    var nested = node.querySelectorAll('iframe');
+                    for (var j = 0; j < nested.length; j++) iframes.push(nested[j]);
+                }
+                for (var k = 0; k < iframes.length; k++) {
+                    var f = iframes[k];
+                    var s = f.src || f.getAttribute('place_src') || '';
+                    if (s.indexOf('ptlogin2.qq.com') !== -1 && !window.__dfCapturedLoginSrc) {
+                        window.__dfCapturedLoginSrc = s;
+                        if (window.DfBridge) window.DfBridge.loadPtlogin(s);
+                        setTimeout(function() {
+                            var ld = document.getElementById('loginDiv');
+                            if (ld) ld.style.display = 'none';
+                            f.style.display = 'none';
+                        }, 50);
+                        return;
+                    }
+                }
+            }
+        });
+    });
+
+    function startObserve() {
+        if (document.body) {
+            observer.observe(document.body, { childList: true, subtree: true });
+        } else {
+            document.addEventListener('DOMContentLoaded', function() {
+                observer.observe(document.body, { childList: true, subtree: true });
+            });
+        }
+    }
+    startObserve();
+})();
+"""
+
+/**
+ * 自动登录 JS。
+ *
+ * 多策略保证可靠性：
+ * 1. 等待 LoginManager 加载后劫持 openLoginDiv
+ * 2. 直接点击 #dologin
+ * 3. 直接调用 LoginManager.login()
+ */
+private const val JS_AUTO_LOGIN = """
+(function() {
+    if (window.__dfAutoLoginStarted) return;
+    window.__dfAutoLoginStarted = true;
+
+    var MAX_RETRIES = 30;
+    var retryCount = 0;
+
+    function bridgeLog(message) {
+        try {
+            if (window.DfBridge && window.DfBridge.log) {
+                window.DfBridge.log(message);
+            }
+        } catch (e) {}
+    }
+
+    function normalizePtloginUrl(raw) {
+        if (!raw) return '';
+        var url = String(raw);
+        if (!url || url === 'about:blank' || url.indexOf('javascript:') === 0) return '';
+        if (url.indexOf('//') === 0) return window.location.protocol + url;
+        return url;
+    }
+
+    function isPtloginUrl(raw) {
+        var url = normalizePtloginUrl(raw);
+        return url.indexOf('ptlogin2.qq.com') !== -1;
+    }
+
+    function hideLoginPopup(frame) {
+        var loginDiv = document.getElementById('loginDiv') ||
+            document.querySelector('.login_dialog') ||
+            document.querySelector('[id*=login][style*=display]');
+        if (loginDiv) loginDiv.style.display = 'none';
+
+        var node = frame;
+        var depth = 0;
+        while (node && node !== document.body && depth < 4) {
+            node.style.display = 'none';
+            node = node.parentElement;
+            depth++;
+        }
+    }
+
+    function reportPtloginUrl(raw, frame) {
+        var url = normalizePtloginUrl(raw);
+        if (!isPtloginUrl(url)) return false;
+        if (window.__dfCapturedLoginSrc === url) return true;
+
+        window.__dfCapturedLoginSrc = url;
+        bridgeLog('captured ptlogin iframe: ' + url);
+        if (window.DfBridge && window.DfBridge.loadPtlogin) {
+            window.DfBridge.loadPtlogin(url);
+        }
+        if (frame) {
+            setTimeout(function() { hideLoginPopup(frame); }, 50);
+        }
+        return true;
+    }
+
+    function frameUrl(frame) {
+        if (!frame) return '';
+        var attrs = ['src', 'place_src', 'data-src', 'data-url', 'url'];
+        for (var i = 0; i < attrs.length; i++) {
+            var value = frame.getAttribute && frame.getAttribute(attrs[i]);
+            if (isPtloginUrl(value)) return value;
+        }
+        if (isPtloginUrl(frame.src)) return frame.src;
+        return '';
+    }
+
+    function inspectNodeForPtlogin(node) {
+        if (!node) return false;
+        if (node.tagName === 'IFRAME' || node.tagName === 'FRAME') {
+            var direct = frameUrl(node);
+            if (direct) return reportPtloginUrl(direct, node);
+        }
+        if (!node.querySelectorAll) return false;
+        var frames = node.querySelectorAll('iframe, frame');
+        for (var i = 0; i < frames.length; i++) {
+            var url = frameUrl(frames[i]);
+            if (url && reportPtloginUrl(url, frames[i])) return true;
+        }
+        return false;
+    }
+
+    function scanExistingPtloginFrames() {
+        return inspectNodeForPtlogin(document.documentElement);
+    }
+
+    function installPtloginFrameCapture() {
+        if (window.__dfPtloginFrameCaptureInstalled) {
+            scanExistingPtloginFrames();
+            return;
+        }
+        window.__dfPtloginFrameCaptureInstalled = true;
+        bridgeLog('installing ptlogin iframe capture');
+
+        var originalSetAttribute = Element.prototype.setAttribute;
+        Element.prototype.setAttribute = function(name, value) {
+            var result = originalSetAttribute.apply(this, arguments);
+            if ((this.tagName === 'IFRAME' || this.tagName === 'FRAME') &&
+                /^(src|place_src|data-src|data-url)$/i.test(name || '')) {
+                reportPtloginUrl(value, this);
+            }
+            return result;
+        };
+
+        var observer = new MutationObserver(function(mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                var mutation = mutations[i];
+                if (mutation.type === 'attributes') {
+                    inspectNodeForPtlogin(mutation.target);
+                }
+                for (var j = 0; j < mutation.addedNodes.length; j++) {
+                    inspectNodeForPtlogin(mutation.addedNodes[j]);
+                }
+            }
+        });
+
+        function startObserve() {
+            var root = document.documentElement || document.body;
+            if (!root) {
+                setTimeout(startObserve, 50);
+                return;
+            }
+            observer.observe(root, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['src', 'place_src', 'data-src', 'data-url']
+            });
+            scanExistingPtloginFrames();
+        }
+        startObserve();
+
+        var scans = 0;
+        var scanTimer = setInterval(function() {
+            scans++;
+            scanExistingPtloginFrames();
+            if (window.__dfCapturedLoginSrc || scans >= 120) {
+                clearInterval(scanTimer);
+            }
+        }, 250);
+    }
+
+    installPtloginFrameCapture();
+
+    function hookOpenLoginDiv() {
+        if (typeof LoginManager === 'undefined') return false;
+        if (!LoginManager._coverdiv) return false;
+        if (!LoginManager._coverdiv.openLoginDiv) return false;
+
+        var original = LoginManager._coverdiv.openLoginDiv;
+        LoginManager._coverdiv.openLoginDiv = function(opts) {
+            var loginUrl = opts && (opts.src || opts.url || opts.href);
+            if (reportPtloginUrl(loginUrl, null)) {
+                return;
+            }
+            return original.call(this, opts);
+        };
+        return true;
+    }
+
+    function tryAutoLogin() {
+        retryCount++;
+        if (retryCount > MAX_RETRIES) return;
+
+        // 策略1：劫持 LoginManager 后调用 initLogin
+        if (hookOpenLoginDiv()) {
+            if (typeof initLogin === 'function') {
+                initLogin();
+                return;
+            }
+        }
+
+        // 策略2：直接点击登录按钮
+        var dologin = document.getElementById('dologin');
+        if (dologin) {
+            dologin.click();
+            setTimeout(function() {
+                var qqBtn = document.querySelector('.myqqlogin');
+                if (qqBtn) qqBtn.click();
+            }, 200);
+            return;
+        }
+
+        // 策略3：直接调用 LoginManager.login()
+        if (typeof LoginManager !== 'undefined' && typeof LoginManager.login === 'function') {
+            LoginManager.login();
+            return;
+        }
+
+        // 重试
+        setTimeout(tryAutoLogin, 300);
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(tryAutoLogin, 100);
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(tryAutoLogin, 100);
+        });
+    }
+})();
+"""
+
+/**
+ * 放大嵌在 pvp.qq.com 父页面里的 QQ 登录 iframe。
+ *
+ * ptlogin 的二维码实际渲染在跨域 iframe 内，父页面不能直接修改 iframe 内部 DOM，
+ * 因此这里把整个 iframe 渲染层放大并固定到屏幕前景，让二维码本身在设备上变大。
+ */
+private const val JS_SCALE_LOGIN_DIALOG = """
+(function() {
+    function log(message) {
+        try {
+            if (window.DfBridge && window.DfBridge.log) {
+                window.DfBridge.log(message);
+            }
+        } catch (e) {}
+    }
+
+    function isVisible(el) {
+        if (!el) return false;
+        var rect = el.getBoundingClientRect();
+        var style = window.getComputedStyle(el);
+        return rect.width > 80 &&
+            rect.height > 80 &&
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            style.opacity !== '0';
+    }
+
+    function frameUrl(frame) {
+        if (!frame) return '';
+        return frame.src ||
+            frame.getAttribute('src') ||
+            frame.getAttribute('place_src') ||
+            frame.getAttribute('data-src') ||
+            '';
+    }
+
+    function findPtloginFrame() {
+        var frames = document.querySelectorAll('iframe, frame');
+        var fallback = null;
+        for (var i = 0; i < frames.length; i++) {
+            var frame = frames[i];
+            var url = frameUrl(frame);
+            if (url.indexOf('ptlogin2.qq.com') !== -1 && isVisible(frame)) {
+                return frame;
+            }
+            var rect = frame.getBoundingClientRect();
+            if (!fallback && isVisible(frame) && rect.width > 500 && rect.height > 300) {
+                fallback = frame;
+            }
+        }
+        return fallback;
+    }
+
+    function setImportant(el, name, value) {
+        el.style.setProperty(name, value, 'important');
+    }
+
+    var frame = findPtloginFrame();
+    if (!frame) return false;
+
+    var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1080;
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1900;
+    var scale = 3;
+    var left = Math.round((viewportWidth / 2) - (245 * scale));
+    var top = Math.max(170, Math.round((viewportHeight / 2) - (185 * scale)));
+
+    setImportant(frame, 'position', 'fixed');
+    setImportant(frame, 'left', left + 'px');
+    setImportant(frame, 'top', top + 'px');
+    setImportant(frame, 'width', '760px');
+    setImportant(frame, 'height', '520px');
+    setImportant(frame, 'min-width', '760px');
+    setImportant(frame, 'min-height', '520px');
+    setImportant(frame, 'transform', 'scale(3)');
+    setImportant(frame, 'transform-origin', '0 0');
+    setImportant(frame, 'z-index', '2147483647');
+    setImportant(frame, 'border', '0');
+    setImportant(frame, 'background', '#fff');
+    setImportant(frame, 'box-shadow', '0 8px 28px rgba(0,0,0,.22)');
+
+    var node = frame.parentElement;
+    var depth = 0;
+    while (node && node !== document.body && depth < 8) {
+        setImportant(node, 'overflow', 'visible');
+        setImportant(node, 'z-index', '2147483646');
+        node = node.parentElement;
+        depth++;
+    }
+
+    document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+    document.body.style.setProperty('overflow', 'hidden', 'important');
+    window.__dfPtloginDialogScaled = true;
+    log('scaled visible ptlogin iframe at ' + left + ',' + top);
+    return true;
+})();
+"""
+
+/**
+ * 放大 ptlogin2.qq.com 页面的二维码图片。
+ * 二维码在桌面页面中尺寸较小，在手机端不便扫码，
+ * 通过 JS 将其放大至接近屏幕宽度，同时限制最大尺寸防止溢出。
+ */
+private const val JS_ENLARGE_QRCODE = """
+(function() {
+    if (window.__dfQrEnlargeStarted) {
+        if (window.__dfEnlargeQrNow) window.__dfEnlargeQrNow();
+        return;
+    }
+    window.__dfQrEnlargeStarted = true;
+
+    function setImportant(el, name, value) {
+        el.style.setProperty(name, value, 'important');
+    }
+
+    function findQrImage() {
+        var selectors = [
+            '#qrcode_img',
+            '#qrlogin_img',
+            '#qr_img',
+            '.qrcode-img img',
+            '.qrlogin_img img',
+            '.qr-img img',
+            '#qrlogin img',
+            '#qrImg',
+            '#qrimg',
+            '.qrcode img',
+            'img[src*=ptqrshow]',
+            'img[src*=qrcode]',
+            'img[class*=qr]',
+            'img[id*=qr]'
+        ];
+
+        for (var i = 0; i < selectors.length; i++) {
+            var selected = document.querySelector(selectors[i]);
+            if (selected) return selected;
+        }
+
+        var imgs = document.querySelectorAll('img');
+        var best = null;
+        var bestSize = 0;
+        for (var j = 0; j < imgs.length; j++) {
+            var img = imgs[j];
+            var width = img.naturalWidth || img.width || parseInt(img.getAttribute('width'), 10) || 0;
+            var height = img.naturalHeight || img.height || parseInt(img.getAttribute('height'), 10) || 0;
+            var src = img.currentSrc || img.src || '';
+            var looksLikeQr = src.indexOf('ptqrshow') !== -1 ||
+                src.indexOf('qrcode') !== -1 ||
+                src.indexOf('qr') !== -1;
+            var isSquare = width >= 80 && height >= 80 && Math.abs(width - height) <= 12;
+            if ((looksLikeQr || isSquare) && Math.min(width, height) > bestSize) {
+                best = img;
+                bestSize = Math.min(width, height);
+            }
+        }
+        return best;
+    }
+
+    function enlarge() {
+        var qrImg = findQrImage();
+        if (!qrImg) return;
+
+        var vw = window.innerWidth || document.documentElement.clientWidth;
+        var vh = window.innerHeight || document.documentElement.clientHeight;
+        var targetSize = Math.floor(Math.min(vw * 0.88, vh * 0.7, 420));
+        targetSize = Math.max(targetSize, 180);
+        targetSize = Math.min(targetSize, Math.floor(vw * 0.96), Math.floor(vh * 0.8));
+
+        setImportant(qrImg, 'width', targetSize + 'px');
+        setImportant(qrImg, 'height', targetSize + 'px');
+        setImportant(qrImg, 'max-width', '96vw');
+        setImportant(qrImg, 'max-height', '80vh');
+        setImportant(qrImg, 'display', 'block');
+        setImportant(qrImg, 'margin', '0 auto');
+        setImportant(qrImg, 'image-rendering', 'pixelated');
+
+        var node = qrImg.parentElement;
+        var depth = 0;
+        while (node && node !== document.body && depth < 5) {
+            setImportant(node, 'width', targetSize + 'px');
+            setImportant(node, 'max-width', '96vw');
+            setImportant(node, 'height', 'auto');
+            setImportant(node, 'margin-left', 'auto');
+            setImportant(node, 'margin-right', 'auto');
+            setImportant(node, 'overflow', 'visible');
+            node = node.parentElement;
+            depth++;
+        }
+
+        setImportant(document.body, 'overflow', 'hidden');
+        setImportant(document.body, 'margin', '0');
+        setImportant(document.body, 'padding', '0');
+        setImportant(document.body, 'min-height', '100vh');
+        setImportant(document.documentElement, 'overflow', 'hidden');
+        window.__dfQrEnlarged = true;
+    }
+
+    window.__dfEnlargeQrNow = enlarge;
+
+    var pending = false;
+    function scheduleEnlarge() {
+        if (pending) return;
+        pending = true;
+        setTimeout(function() {
+            pending = false;
+            enlarge();
+        }, 50);
+    }
+
+    enlarge();
+    var attempts = 0;
+    var retryTimer = setInterval(function() {
+        attempts++;
+        enlarge();
+        if (window.__dfQrEnlarged && attempts >= 12) {
+            clearInterval(retryTimer);
+        }
+        if (attempts >= 120) {
+            clearInterval(retryTimer);
+        }
+    }, 250);
+
+    var observer = new MutationObserver(scheduleEnlarge);
+    observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['src', 'class', 'width', 'height']
+    });
+})();
+"""

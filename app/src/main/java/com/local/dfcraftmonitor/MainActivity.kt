@@ -74,6 +74,11 @@ private fun DfNavGraph(sessionHolder: SessionHolder) {
                 onNavigateToSettings = {
                     navController.navigate(Routes.SETTINGS)
                 },
+                onLogout = {
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
             )
         }
         composable(Routes.SETTINGS) {

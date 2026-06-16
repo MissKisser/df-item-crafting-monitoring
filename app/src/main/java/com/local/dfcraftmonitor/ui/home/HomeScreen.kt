@@ -16,13 +16,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,9 +66,11 @@ import kotlinx.coroutines.delay
 @Composable
 fun HomeScreen(
     onNavigateToSettings: () -> Unit = {},
+    onLogout: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val accountInfo = viewModel.accountMenuInfo()
     val context = LocalContext.current
 
     // 通知权限状态：进入页面时查一次，权限申请后回调时再查一次
@@ -89,18 +94,71 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
+            var menuExpanded by remember { mutableStateOf(false) }
             TopAppBar(
                 title = { Text("特勤处监控") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White,
+                    actionIconContentColor = Color.White,
                 ),
                 actions = {
                     IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "刷新", tint = Color.White)
+                        Icon(Icons.Default.Refresh, contentDescription = "刷新")
                     }
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "设置", tint = Color.White)
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                                Text(
+                                    "当前账号",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    accountInfo.account,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                                Text(
+                                    "AppID ${accountInfo.appId}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                                Text(
+                                    "三角洲角色",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 12.dp),
+                                )
+                                Text(
+                                    accountInfo.deltaRole,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("设置") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onNavigateToSettings()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("退出重新登录") },
+                                onClick = {
+                                    menuExpanded = false
+                                    viewModel.clearDataAndLogout(onLogout)
+                                },
+                            )
+                        }
                     }
                 },
             )
@@ -131,7 +189,7 @@ fun HomeScreen(
                     is HomeViewModel.UiState.Error -> Center { Text("错误：${s.message}") }
                     is HomeViewModel.UiState.AuthExpired -> AuthExpiredPanel(
                         reason = s.reason,
-                        onReLogin = viewModel::onAuthExpired,
+                        onReLogin = { viewModel.clearDataAndLogout(onLogout) },
                     )
                     is HomeViewModel.UiState.Success -> SnapshotContent(s.snapshot)
                 }

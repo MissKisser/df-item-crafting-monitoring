@@ -51,7 +51,19 @@ class LoginViewModel @Inject constructor(
             _state.value = UiState.LoggedIn
             credential
         } else {
-            _state.value = UiState.Failed("Cookie 缺少 openid/acctype/appid/access_token 之一")
+            // 诊断信息：显示哪些字段缺失 + 哪些域有 Cookie
+            val missing = buildList {
+                if (parsed["openid"].isNullOrEmpty()) add("openid")
+                if (parsed["acctype"].isNullOrEmpty()) add("acctype")
+                if (parsed["appid"].isNullOrEmpty()) add("appid")
+                if (parsed["access_token"].isNullOrEmpty()) add("access_token")
+            }
+            val domains = cookies.keys.joinToString(", ")
+            _state.value = UiState.Failed(
+                "Cookie 缺少字段：${missing.joinToString(", ")}。" +
+                    "已获取域：$domains。" +
+                    "请确认扫码后等待页面跳转完成"
+            )
             null
         }
     }

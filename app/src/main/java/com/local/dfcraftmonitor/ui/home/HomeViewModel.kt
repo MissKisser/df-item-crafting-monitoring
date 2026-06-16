@@ -2,6 +2,7 @@ package com.local.dfcraftmonitor.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.local.dfcraftmonitor.data.AppDataCleaner
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
 import com.local.dfcraftmonitor.data.remote.AmsCraftingParser
 import com.local.dfcraftmonitor.data.repository.CraftingRepository
@@ -24,6 +25,7 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val craftingRepository: CraftingRepository,
     private val sessionHolder: SessionHolder,
+    private val appDataCleaner: AppDataCleaner,
     private val workScheduler: WorkScheduler,
     private val widgetRefresher: WidgetRefresher,
 ) : ViewModel() {
@@ -68,6 +70,33 @@ class HomeViewModel @Inject constructor(
         workScheduler.cancel()
     }
 
+    fun accountMenuInfo(): AccountMenuInfo {
+        val credential = sessionHolder.get()
+        val currentState = state.value
+        return AccountMenuInfo(
+            account = if (credential == null) {
+                "未登录"
+            } else {
+                "${credential.acctype.uppercase()} · OpenID ${credential.openid.maskMiddle()}"
+            },
+            appId = credential?.appid?.takeIf { it.isNotBlank() } ?: "-",
+            deltaRole = when (currentState) {
+                is UiState.Success -> "已绑定（三角洲特勤处，${currentState.snapshot.stations.size} 个工位）"
+                UiState.Loading -> "读取中…"
+                UiState.NotLoggedIn -> "未绑定"
+                is UiState.AuthExpired -> "登录失效，需重新绑定"
+                is UiState.Error -> "未确认：${currentState.message}"
+            },
+        )
+    }
+
+    fun clearDataAndLogout(onCleared: () -> Unit) {
+        viewModelScope.launch {
+            appDataCleaner.clearAll()
+            onCleared()
+        }
+    }
+
     sealed interface UiState {
         data object Loading : UiState
         data object NotLoggedIn : UiState
@@ -75,4 +104,15 @@ class HomeViewModel @Inject constructor(
         data class Error(val message: String) : UiState
         data class AuthExpired(val reason: String) : UiState
     }
+
+    data class AccountMenuInfo(
+        val account: String,
+        val appId: String,
+        val deltaRole: String,
+    )
+}
+
+private fun String.maskMiddle(): String {
+    if (length <= 8) return this
+    return "${take(4)}…${takeLast(4)}"
 }
