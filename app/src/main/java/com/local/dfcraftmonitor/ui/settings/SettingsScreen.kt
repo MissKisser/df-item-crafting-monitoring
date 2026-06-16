@@ -44,7 +44,7 @@ import com.local.dfcraftmonitor.data.preference.MonitoringMode
 /**
  * 设置页：监控模式 + 低电量策略 + 隐私说明入口 + 清除数据并退出。
  *
- * spec M3：用户控制（spec 6.2 低电量策略、spec 10.3 隐私说明）。
+ * 用户控制：同步频率、低电量策略、隐私说明与本地数据清理。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,7 +126,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("低电量时继续监控", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "开启后 WorkManager 不受 BATTERY_NOT_LOW 约束",
+                            "开启后低电量也会保持制造提醒",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

@@ -3,6 +3,8 @@ package com.local.dfcraftmonitor.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.local.dfcraftmonitor.data.AppDataCleaner
+import com.local.dfcraftmonitor.data.backend.LocalDashboardData
+import com.local.dfcraftmonitor.data.model.AmsCredential
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
 import com.local.dfcraftmonitor.data.remote.AmsCraftingParser
 import com.local.dfcraftmonitor.data.repository.CraftingRepository
@@ -33,6 +35,9 @@ class HomeViewModel @Inject constructor(
     private val _state = MutableStateFlow<UiState>(UiState.Loading)
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    private val _dashboard = MutableStateFlow(craftingRepository.fallbackDashboard())
+    val dashboard: StateFlow<LocalDashboardData> = _dashboard.asStateFlow()
+
     init {
         refresh()
     }
@@ -41,10 +46,12 @@ class HomeViewModel @Inject constructor(
         val credential = sessionHolder.get()
         if (credential == null) {
             _state.value = UiState.NotLoggedIn
+            refreshDashboard(null)
             return
         }
         _state.value = UiState.Loading
         viewModelScope.launch {
+            refreshDashboard(credential)
             craftingRepository.fetchCrafting(credential)
                 .onSuccess {
                     _state.value = UiState.Success(it)
@@ -54,10 +61,17 @@ class HomeViewModel @Inject constructor(
                 .onFailure { e ->
                     _state.value = when (e) {
                         is AmsCraftingParser.AuthExpiredException ->
-                            UiState.AuthExpired(e.message ?: "登录已失效")
-                        else -> UiState.Error(e.message ?: "未知错误")
+                            UiState.AuthExpired("登录已失效，请重新绑定账号。")
+                        else -> UiState.Error("同步异常，请稍后重试。")
                     }
                 }
+        }
+    }
+
+    private fun refreshDashboard(credential: AmsCredential?) {
+        viewModelScope.launch {
+            craftingRepository.fetchDashboard(credential)
+                .onSuccess { _dashboard.value = it }
         }
     }
 
@@ -77,15 +91,15 @@ class HomeViewModel @Inject constructor(
             account = if (credential == null) {
                 "未登录"
             } else {
-                "${credential.acctype.uppercase()} · OpenID ${credential.openid.maskMiddle()}"
+                "已登录"
             },
-            appId = credential?.appid?.takeIf { it.isNotBlank() } ?: "-",
+            accountMark = if (credential == null) "访客模式" else "账号已保护",
             deltaRole = when (currentState) {
                 is UiState.Success -> "已绑定（三角洲特勤处，${currentState.snapshot.stations.size} 个工位）"
                 UiState.Loading -> "读取中…"
                 UiState.NotLoggedIn -> "未绑定"
                 is UiState.AuthExpired -> "登录失效，需重新绑定"
-                is UiState.Error -> "未确认：${currentState.message}"
+                is UiState.Error -> "待同步"
             },
         )
     }
@@ -107,12 +121,7 @@ class HomeViewModel @Inject constructor(
 
     data class AccountMenuInfo(
         val account: String,
-        val appId: String,
+        val accountMark: String,
         val deltaRole: String,
     )
-}
-
-private fun String.maskMiddle(): String {
-    if (length <= 8) return this
-    return "${take(4)}…${takeLast(4)}"
 }

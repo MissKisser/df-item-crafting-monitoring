@@ -1,34 +1,42 @@
 package com.local.dfcraftmonitor.data.repository
 
+import com.local.dfcraftmonitor.data.backend.DaySecret
 import com.local.dfcraftmonitor.data.model.AmsCredential
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
-import com.local.dfcraftmonitor.data.remote.AmsConstants
-import com.local.dfcraftmonitor.data.remote.AmsCraftingParser
-import com.local.dfcraftmonitor.data.remote.AmsHeadersInterceptor
-import com.local.dfcraftmonitor.data.remote.CraftingApi
+import com.local.dfcraftmonitor.data.backend.LocalBackend
+import com.local.dfcraftmonitor.data.backend.LocalDashboardData
+import com.local.dfcraftmonitor.data.backend.MapSummary
+import com.local.dfcraftmonitor.data.backend.ToolObjectSummary
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 特勤处仓库。封装"注入 Cookie → 调 AMS API → 解析响应"链路，对外暴露
- * suspend 函数 + Result，让 UI 层无需关心网络细节。
+ * 特勤处仓库。对 UI / Worker 暴露领域级制造快照，实际远程请求统一交给本地后端边界。
  *
- * M3 阶段只做单账号内存会话；M4 接入 Room 后这里加本地缓存。
+ * V2 起，UI、Worker、Widget 都不直接拼 AMS URL，也不接触 headers/cookie 注入细节。
  */
 @Singleton
 class CraftingRepository @Inject constructor(
-    private val craftingApi: CraftingApi,
-    private val headersInterceptor: AmsHeadersInterceptor,
+    private val localBackend: LocalBackend,
 ) {
 
-    /**
-     * 用 [credential] 拉特勤处当前快照。
-     * 流程：临时把 credential 的 qc Cookie 注入拦截器 → GET → 解析 jData 树。
-     */
-    suspend fun fetchCrafting(credential: AmsCredential): Result<CraftingSnapshot> = runCatching {
-        headersInterceptor.cookie = credential.cookieHeader()
-        val url = "${AmsConstants.CRAFTING_BASE_URL}?${AmsConstants.CRAFTING_QUERY_PARAMS}"
-        val body = craftingApi.getCrafting(url, gTk = 0).string()
-        AmsCraftingParser.parse(body)
-    }
+    suspend fun fetchCrafting(credential: AmsCredential): Result<CraftingSnapshot> =
+        localBackend.getCrafting(credential)
+
+    suspend fun fetchDashboard(credential: AmsCredential?): Result<LocalDashboardData> =
+        localBackend.getDashboard(credential)
+
+    fun fallbackDashboard(): LocalDashboardData = localBackend.getFallbackDashboard()
+
+    fun toolCategories(): List<String> = localBackend.getToolCategories()
+
+    fun toolObjects(): List<ToolObjectSummary> = localBackend.getToolObjects()
+
+    fun daySecrets(): List<DaySecret> = localBackend.getDaySecrets()
+
+    fun maps(): List<MapSummary> = localBackend.getMaps()
+
+    fun homeBannerImageUrl(): String = localBackend.getHomeBannerImageUrl()
+
+    fun profileImageUrl(): String = localBackend.getProfileImageUrl()
 }

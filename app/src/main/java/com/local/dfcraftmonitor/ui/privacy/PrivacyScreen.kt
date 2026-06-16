@@ -26,7 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.local.dfcraftmonitor.ui.settings.SettingsViewModel
 
 /**
- * 隐私说明页（spec 10.3）。
+ * 隐私说明页。
  *
  * 轻量级：仅在设置页展示，不做首屏强制弹窗。
  * 进入时标记 welcomeShown = true（UserPreferences）。
@@ -71,35 +71,35 @@ fun PrivacyScreen(
         ) {
             PrivacySection("数据收集")
             PrivacyBody(
-                "本应用仅通过腾讯 AMS 接口获取您在《三角洲行动》游戏中的特勤处制造数据" +
-                    "（工位状态、物品名称、剩余时间等），不收集任何其他个人信息。",
+                "本应用仅用于读取您在《三角洲行动》中的特勤处制造信息" +
+                    "（工位状态、物品名称、剩余时间等），不收集与本功能无关的个人信息。",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
             PrivacySection("数据存储")
             PrivacyBody(
-                "所有数据仅存储在您的设备本地（DataStore），不会上传至任何第三方服务器。" +
-                    "应用重启后登录凭据不会持久化，需重新登录。",
+                "所有数据仅保存在您的设备中，不会上传至任何第三方服务器。" +
+                    "应用重启后登录状态不会长期保留，需重新登录。",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
-            PrivacySection("数据传输")
+            PrivacySection("同步保护")
             PrivacyBody(
-                "网络请求仅发往腾讯官方域名（pvp.qq.com），使用 HTTPS 加密传输。" +
-                    "Cookie 仅用于接口鉴权，不会分享给任何第三方。",
+                "同步请求仅用于获取游戏内状态，并通过加密连接完成。" +
+                    "登录材料只保留在本机运行期间，不会分享给任何第三方。",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
             PrivacySection("后台行为")
             PrivacyBody(
-                "应用使用 WorkManager 周期性（约 15 分钟）轮询制造状态，" +
+                "应用会周期性（约 15 分钟）检查制造状态，" +
                     "用于在制造完成时发送本地通知提醒。此行为可在设置中关闭。",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
             PrivacySection("权限使用")
             PrivacyBody(
-                "• 互联网权限：访问腾讯 AMS 接口\n" +
+                "• 互联网权限：同步游戏内制造状态\n" +
                     "• 通知权限：发送制造完成提醒（Android 13+ 需用户授权）\n" +
                     "• 开机启动权限：设备重启后恢复周期轮询",
             )

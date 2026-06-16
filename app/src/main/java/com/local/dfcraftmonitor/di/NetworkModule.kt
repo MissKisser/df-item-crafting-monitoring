@@ -1,5 +1,9 @@
 package com.local.dfcraftmonitor.di
 
+import com.local.dfcraftmonitor.data.backend.AmsRemoteClient
+import com.local.dfcraftmonitor.data.backend.DefaultLocalBackend
+import com.local.dfcraftmonitor.data.backend.LocalBackend
+import com.local.dfcraftmonitor.data.backend.RetrofitAmsRemoteClient
 import com.local.dfcraftmonitor.data.remote.AmsHeadersInterceptor
 import com.local.dfcraftmonitor.data.remote.CraftingApi
 import dagger.Module
@@ -14,7 +18,7 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import javax.inject.Singleton
 
 /**
- * 网络层 Hilt 依赖图。提供 OkHttp、Retrofit、CraftingApi 单例。
+ * 网络层 Hilt 依赖图。提供 OkHttp、Retrofit、AMS remote client 与本地后端单例。
  *
  * g_tkCalculator / AmsInterceptor 单例由 Hilt 按构造器注入。
  */
@@ -51,4 +55,16 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideCraftingApi(retrofit: Retrofit): CraftingApi = retrofit.create(CraftingApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAmsRemoteClient(
+        craftingApi: CraftingApi,
+        headersInterceptor: AmsHeadersInterceptor,
+    ): AmsRemoteClient = RetrofitAmsRemoteClient(craftingApi, headersInterceptor)
+
+    @Provides
+    @Singleton
+    fun provideLocalBackend(remoteClient: AmsRemoteClient): LocalBackend =
+        DefaultLocalBackend(remoteClient)
 }

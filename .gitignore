@@ -40,6 +40,7 @@ app/libs/
 *.db
 captures/
 logs/
+.omx/interface-capture/private/  # V2 接口抓取 token/cookie 私有目录
 
 # 临时二进制
 *.bin

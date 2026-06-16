@@ -27,8 +27,7 @@ import javax.inject.Inject
 /**
  * 单 Activity 入口。NavHost 串起 Login ↔ Home。
  *
- * 起点判断：已登录（SessionHolder 有 credential）→ Home，否则 → Login。
- * M3 不持久化会话（App 重启回 Login），M4 改为读 DataStore。
+ * V2 起始终进入主界面：无登录也可以浏览公开/本地后端降级数据，需要账号数据时再进入 Login。
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -57,9 +56,8 @@ private object Routes {
 @androidx.compose.runtime.Composable
 private fun DfNavGraph(sessionHolder: SessionHolder) {
     val navController = rememberNavController()
-    val startRoute = if (sessionHolder.isLoggedIn()) Routes.HOME else Routes.LOGIN
 
-    NavHost(navController = navController, startDestination = startRoute) {
+    NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.LOGIN) {
             LoginScreen(
                 onLoggedIn = {
