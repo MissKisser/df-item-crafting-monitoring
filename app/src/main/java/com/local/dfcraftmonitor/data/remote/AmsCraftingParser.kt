@@ -52,7 +52,7 @@ object AmsCraftingParser {
             }
         }
 
-        return CraftingSnapshot(
+        return CraftingSnapshot.create(
             serverNowEpochSeconds = payload.optLong("nowTime", 0L),
             fetchedAtEpochMillis = System.currentTimeMillis(),
             stations = stations,
