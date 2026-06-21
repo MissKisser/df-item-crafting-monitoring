@@ -53,7 +53,7 @@ fun PrivacyScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "隐私说明",
+                        text = "隐私声明",
                         color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
@@ -84,30 +84,35 @@ fun PrivacyScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item(key = "intro") {
-                SectionHeader("数据与权限", "三角洲助手承诺本地优先")
+            // ===================== 总则 =====================
+            item(key = "section-overview") {
+                SectionHeader("隐私声明", "开发者 misskisserxr@gmail.com")
             }
-            item(key = "intro-card") {
+            item(key = "overview-card") {
                 TacticalPanel {
                     Text(
-                        text = "本应用所有账号数据、Cookie、缓存均存储在设备本地，" +
-                            "我们不收集任何账号信息、不上传任何业务数据。",
+                        text = "三角洲助手（以下简称本应用）由个人开发者维护，开发者邮箱：misskisserxr@gmail.com。\n\n" +
+                            "本应用是一款完全本地化运行的辅助工具，不依赖任何业务后端服务器。" +
+                            "所有账号信息、Cookie、缓存、Widget 数据均仅保存在用户本机，" +
+                            "开发者及任何第三方均无法访问、收集或上传上述数据。",
                         color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
 
-            item(key = "section-storage") { SectionHeader("本地存储") }
+            // ===================== 数据存储 =====================
+            item(key = "section-storage") { SectionHeader("数据存储") }
             item(key = "storage-card") {
                 TacticalPanel {
-                    BulletLine("账号 Cookie：仅用于维持官方页面登录会话。")
-                    BulletLine("制造快照：缓存最近一次拉取数据，用于离线浏览与差异。")
-                    BulletLine("Widget 缓存：用于桌面小组件展示。")
-                    BulletLine("通知偏好：用于控制是否在后台发送完成提醒。")
+                    BulletLine("账号 Cookie：仅保存在本机 DataStore 中，用于维持官方页面登录会话。")
+                    BulletLine("制造快照：本地缓存最近一次拉取的特勤处数据，仅用于离线浏览与差异计算。")
+                    BulletLine("Widget 缓存：用于桌面小组件展示，不与开发者共享。")
+                    BulletLine("通知偏好：用于控制是否在后台发送制造完成提醒。")
                 }
             }
 
+            // ===================== 权限说明 =====================
             item(key = "section-permission") { SectionHeader("权限说明") }
             item(key = "perm-internet") {
                 BulletCard("网络权限", "用于登录页 WebView 加载与制造数据同步。")
@@ -119,28 +124,54 @@ fun PrivacyScreen(
                 BulletCard("开机启动", "用于在设备重启后恢复后台同步。")
             }
 
+            // ===================== 第三方依赖 =====================
             item(key = "section-third-party") { SectionHeader("第三方依赖") }
             item(key = "third-party-card") {
                 TacticalPanel {
-                    BulletLine("OkHttp / Retrofit：网络请求")
-                    BulletLine("Hilt：依赖注入")
-                    BulletLine("WorkManager：后台任务调度")
+                    BulletLine("OkHttp / Retrofit：网络请求（仅与官方页面交互）")
+                    BulletLine("Hilt：依赖注入（编译时）")
+                    BulletLine("WorkManager：后台任务调度（仅在本机执行）")
                     BulletLine("Jetpack Compose / Material 3：UI 框架")
                 }
             }
 
-            item(key = "section-clear") { SectionHeader("清空数据") }
-            item(key = "clear-tip") {
+            // ===================== 免责声明 =====================
+            item(key = "section-disclaimer") { SectionHeader("免责声明") }
+            item(key = "disclaimer-card") {
                 TacticalPanel {
                     Text(
-                        text = "如需清除所有本地数据（账号、Cookie、缓存、Widget），" +
-                            "请在「设置 → 账号操作 → 清空所有本地数据」中操作。",
+                        text = "1. 本应用仅作为官方页面的本地化辅助工具，所有数据来源于官方公开接口，" +
+                            "开发者不对数据准确性、完整性、及时性做任何承诺。\n\n" +
+                            "2. 本应用与三角洲行动官方无任何合作关系，游戏中任何政策、规则调整" +
+                            "可能导致本应用部分功能失效，开发者不承担由此产生的任何损失。\n\n" +
+                            "3. 用户应自行妥善保管本机账号凭证，因设备丢失、未授权访问等" +
+                            "造成的任何后果由用户本人承担。\n\n" +
+                            "4. 使用本应用即视为同意以上条款。如不同意，请卸载本应用并清除所有本地数据。",
                         color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+
+            // ===================== 联系开发者 =====================
+            item(key = "section-contact") { SectionHeader("联系开发者") }
+            item(key = "contact-card") {
+                TacticalPanel {
                     Text(
-                        text = "操作不可恢复，请确认后执行。",
+                        text = "如有问题、建议或合作意向，请通过以下方式联系：",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "邮箱：misskisserxr@gmail.com",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "本声明最终解释权归开发者所有。",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )

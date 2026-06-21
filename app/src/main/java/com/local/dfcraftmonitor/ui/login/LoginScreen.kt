@@ -178,7 +178,7 @@ private fun AddAccountBanner() {
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Text(
-            text = "请扫码登录新账号（已自动登出当前 WebView 登录态）",
+            text = "请扫码登录新账号",
             color = MaterialTheme.colorScheme.onTertiaryContainer,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,

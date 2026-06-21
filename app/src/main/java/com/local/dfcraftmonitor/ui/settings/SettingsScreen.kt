@@ -24,7 +24,6 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PrivacyTip
@@ -109,7 +108,6 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Outlined.NotificationsActive,
                     title = "制造完成提醒",
-                    subtitle = "后台同步触发本地通知（每 15 分钟）",
                     trailing = {
                         Switch(
                             checked = prefs.craftingNotificationEnabled,
@@ -148,23 +146,12 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.AutoMirrored.Filled.Logout,
                     title = "退出当前账号",
-                    subtitle = "清除当前账号缓存与 Cookie",
+                    subtitle = "清除当前账号与缓存",
                     tint = SemanticColors.warn,
                     onClick = {
                         viewModel.logoutCurrent { remaining ->
                             if (remaining == null) onLogout()
                         }
-                    },
-                )
-            }
-            item(key = "row-clear-all") {
-                SettingsRow(
-                    icon = Icons.Outlined.DeleteForever,
-                    title = "清空所有本地数据",
-                    subtitle = "账号、Cookie、缓存、Widget 全部清除（不可恢复）",
-                    tint = SemanticColors.loss,
-                    onClick = {
-                        viewModel.clearAll { onLogout() }
                     },
                 )
             }
