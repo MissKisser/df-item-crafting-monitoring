@@ -1,12 +1,16 @@
 package com.local.dfcraftmonitor.ui.privacy
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,9 +24,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.local.dfcraftmonitor.ui.common.SectionHeader
+import com.local.dfcraftmonitor.ui.common.TacticalPanel
 import com.local.dfcraftmonitor.ui.settings.SettingsViewModel
 
 /**
@@ -37,104 +43,137 @@ fun PrivacyScreen(
     onBack: () -> Unit = {},
     settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    // 进入隐私页即标记已读
     LaunchedEffect(Unit) {
         settingsViewModel.setWelcomeShown(true)
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("隐私说明") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = Color.White,
-                ),
+                title = {
+                    Text(
+                        text = "隐私说明",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+                windowInsets = WindowInsets.statusBars,
             )
         },
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .padding(padding),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            PrivacySection("数据收集")
-            PrivacyBody(
-                "本应用仅用于读取您在《三角洲行动》中的特勤处制造信息" +
-                    "（工位状态、物品名称、剩余时间等），不收集与本功能无关的个人信息。",
-            )
+            item(key = "intro") {
+                SectionHeader("数据与权限", "三角洲助手承诺本地优先")
+            }
+            item(key = "intro-card") {
+                TacticalPanel {
+                    Text(
+                        text = "本应用所有账号数据、Cookie、缓存均存储在设备本地，" +
+                            "我们不收集任何账号信息、不上传任何业务数据。",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            PrivacySection("数据存储")
-            PrivacyBody(
-                "所有数据仅保存在您的设备中，不会上传至任何第三方服务器。" +
-                    "应用重启后登录状态不会长期保留，需重新登录。",
-            )
+            item(key = "section-storage") { SectionHeader("本地存储") }
+            item(key = "storage-card") {
+                TacticalPanel {
+                    BulletLine("账号 Cookie：仅用于维持官方页面登录会话。")
+                    BulletLine("制造快照：缓存最近一次拉取数据，用于离线浏览与差异。")
+                    BulletLine("Widget 缓存：用于桌面小组件展示。")
+                    BulletLine("通知偏好：用于控制是否在后台发送完成提醒。")
+                }
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            PrivacySection("同步保护")
-            PrivacyBody(
-                "同步请求仅用于获取游戏内状态，并通过加密连接完成。" +
-                    "登录材料只保留在本机运行期间，不会分享给任何第三方。",
-            )
+            item(key = "section-permission") { SectionHeader("权限说明") }
+            item(key = "perm-internet") {
+                BulletCard("网络权限", "用于登录页 WebView 加载与制造数据同步。")
+            }
+            item(key = "perm-notif") {
+                BulletCard("通知权限", "可选；用于在制造完成时发送本地提醒。")
+            }
+            item(key = "perm-boot") {
+                BulletCard("开机启动", "用于在设备重启后恢复后台同步。")
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            PrivacySection("后台行为")
-            PrivacyBody(
-                "应用会周期性（约 15 分钟）检查制造状态，" +
-                    "用于在制造完成时发送本地通知提醒。此行为可在设置中关闭。",
-            )
+            item(key = "section-third-party") { SectionHeader("第三方依赖") }
+            item(key = "third-party-card") {
+                TacticalPanel {
+                    BulletLine("OkHttp / Retrofit：网络请求")
+                    BulletLine("Hilt：依赖注入")
+                    BulletLine("WorkManager：后台任务调度")
+                    BulletLine("Jetpack Compose / Material 3：UI 框架")
+                }
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            PrivacySection("权限使用")
-            PrivacyBody(
-                "• 互联网权限：同步游戏内制造状态\n" +
-                    "• 通知权限：发送制造完成提醒（Android 13+ 需用户授权）\n" +
-                    "• 开机启动权限：设备重启后恢复周期轮询",
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            PrivacySection("数据删除")
-            PrivacyBody(
-                "您可随时在设置页点击「清除数据」删除所有本地缓存和偏好。" +
-                    "卸载应用将自动清除全部数据。",
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                text = "最后更新：2026-06",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            item(key = "section-clear") { SectionHeader("清空数据") }
+            item(key = "clear-tip") {
+                TacticalPanel {
+                    Text(
+                        text = "如需清除所有本地数据（账号、Cookie、缓存、Widget），" +
+                            "请在「设置 → 账号操作 → 清空所有本地数据」中操作。",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "操作不可恢复，请确认后执行。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun PrivacySection(title: String) {
+private fun BulletLine(text: String) {
     Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
+        text = "· $text",
+        color = MaterialTheme.colorScheme.onSurface,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(vertical = 4.dp),
     )
 }
 
 @Composable
-private fun PrivacyBody(content: String) {
-    Text(
-        text = content,
-        style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(top = 4.dp),
-    )
+private fun BulletCard(title: String, body: String) {
+    TacticalPanel {
+        Text(
+            text = title,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = body,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
 }

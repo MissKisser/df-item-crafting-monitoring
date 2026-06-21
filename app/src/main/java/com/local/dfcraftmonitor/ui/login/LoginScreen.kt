@@ -3,12 +3,16 @@ package com.local.dfcraftmonitor.ui.login
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,11 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.local.dfcraftmonitor.BuildConfig
+import com.local.dfcraftmonitor.ui.theme.SemanticColors
 
 /**
  * 登录页。支持首次登录和新增账号两种模式。
@@ -54,8 +59,6 @@ fun LoginScreen(
         viewModel.isAddingAccount = isAddingAccount
         if (isAddingAccount) {
             viewModel.prepareFreshLogin()
-        } else {
-            // 非 addMode 不需要清 Cookie，直接就绪
         }
     }
 
@@ -73,22 +76,24 @@ fun LoginScreen(
     val showWebView = !isAddingAccount || freshLoginReady
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text(if (isAddingAccount) "新增账号" else "登录") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = Color.White,
-                    actionIconContentColor = Color.White,
-                    navigationIconContentColor = Color.White,
-                ),
+                title = {
+                    Text(
+                        text = if (isAddingAccount) "新增账号" else "登录",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                },
                 navigationIcon = {
-                    if (isAddingAccount && onBack != null) {
+                    if (onBack != null) {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "返回",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -96,10 +101,21 @@ fun LoginScreen(
                 actions = {
                     if (showWebView) {
                         IconButton(onClick = { refreshSignal++ }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "刷新登录页面")
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = "刷新登录页面",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
                         }
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.primary,
+                ),
+                windowInsets = WindowInsets.statusBars,
             )
         },
     ) { padding ->
@@ -110,39 +126,22 @@ fun LoginScreen(
                 .background(MaterialTheme.colorScheme.background),
         ) {
             if (isAddingAccount) {
-                Text(
-                    text = "请扫码登录新账号（已自动登出当前 WebView 登录态）",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF1F2937))
-                        .padding(12.dp),
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                AddAccountBanner()
             }
-
-            Text(
-                text = when (val s = state) {
-                    LoginViewModel.UiState.LoggingIn -> "正在加载登录页面，请稍候…"
-                    LoginViewModel.UiState.LoggedIn -> "登录成功，正在跳转…"
-                    is LoginViewModel.UiState.Failed -> "登录失败：${s.reason}"
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF111827))
-                    .padding(16.dp),
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-            )
 
             LoginMethodSelector(
                 selectedLoginMethod = selectedLoginMethod,
                 onLoginMethodSelected = { selectedLoginMethod = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF111827))
                     .padding(horizontal = 16.dp, vertical = 12.dp),
             )
+
+            when (val s = state) {
+                LoginViewModel.UiState.LoggingIn -> StatusStrip("正在加载登录页面，请稍候…")
+                LoginViewModel.UiState.LoggedIn -> StatusStrip("登录成功，正在跳转…")
+                is LoginViewModel.UiState.Failed -> StatusStrip("登录失败：${s.reason}", isError = true)
+            }
 
             if (showWebView) {
                 LoginWebView(
@@ -160,7 +159,7 @@ fun LoginScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        "正在准备扫码登录…",
+                        text = "正在准备扫码登录…",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.titleMedium,
                     )
@@ -168,6 +167,43 @@ fun LoginScreen(
             }
         }
     }
+}
+
+@Composable
+private fun AddAccountBanner() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(
+            text = "请扫码登录新账号（已自动登出当前 WebView 登录态）",
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun StatusStrip(text: String, isError: Boolean = false) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (isError) SemanticColors.loss.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.surfaceVariant,
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(
+            text = text,
+            color = if (isError) SemanticColors.loss else MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+    Spacer(modifier = Modifier.height(8.dp))
 }
 
 private fun loginUrlFor(loginMethod: LoginMethod): String =
@@ -190,9 +226,7 @@ private fun LoginMethodSelector(
         LoginMethod.WECHAT to "微信登录",
     )
 
-    SingleChoiceSegmentedButtonRow(
-        modifier = modifier,
-    ) {
+    SingleChoiceSegmentedButtonRow(modifier = modifier) {
         methods.forEachIndexed { index, (method, label) ->
             SegmentedButton(
                 selected = method == selectedLoginMethod,
@@ -201,7 +235,13 @@ private fun LoginMethodSelector(
                     index = index,
                     count = methods.size,
                 ),
-                label = { Text(label) },
+                colors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    inactiveContainerColor = MaterialTheme.colorScheme.surface,
+                    inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                label = { Text(text = label) },
             )
         }
     }

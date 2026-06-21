@@ -1,8 +1,15 @@
 <resources>
-    <style name="Theme.DfCrafting" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">#1f2937</item>
+    <!--
+        启动主题：纯黑底 + 透明状态栏，避免启动时白屏闪烁。
+        真正的应用主题（动态取色 / Material 3 Expressive）由 Compose 控制，
+        此处只负责 Activity 窗口的初始外观。
+    -->
+    <style name="Theme.DfCrafting" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:navigationBarColor">#f6f7f9</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
     <!-- ====== Widget 工位行（纵向，用于组合卡横向行） ====== -->

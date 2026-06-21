@@ -3,6 +3,7 @@ package com.local.dfcraftmonitor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -28,9 +29,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 边到边布局，让 TopAppBar/NavigationBar 的 windowInsets 接管状态栏/导航栏
+        enableEdgeToEdge()
         setContent {
-            DfCraftingTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            // dynamicColor = true：Android 12+ 自动从系统壁纸取色
+            DfCraftingTheme(dynamicColor = true) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
                     DfNavGraph(sessionHolder)
                 }
             }
