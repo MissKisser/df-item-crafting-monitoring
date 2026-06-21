@@ -128,7 +128,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Default.Add,
                     title = "添加账号",
-                    subtitle = "扫码登录新账号（不清空现有数据）",
+                    subtitle = "扫码登录新账号",
                     onClick = onAddAccount,
                 )
             }
