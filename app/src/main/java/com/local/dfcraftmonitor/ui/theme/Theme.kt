@@ -1,40 +1,33 @@
 package com.local.dfcraftmonitor.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 
 /**
  * 三角洲助手主题。
  *
  * 关键设计：
- *  1. **默认深色**：产品定位夜间作战信息终端，深色为唯一交付主题。
- *  2. **动态取色（Monet）**：Android 12+ 自动从用户壁纸派生主题色，并叠加品牌电光绿调性。
- *  3. **品牌回退**：不支持 Monet 或用户关闭时使用内置品牌色（保证一致体验）。
- *  4. **Expressive 形状与字体**：应用 [DfShapes] 与 [DfTypography]，与 Material 3 Expressive 对齐。
+ *  1. **全局深色**：产品定位夜间作战信息终端，深色为唯一交付主题。
+ *     即使系统切到浅色，APP 仍维持深色调色板，不跟随系统 uiMode 切换。
+ *  2. **禁用 Monet 动态取色**（产品决策）：品牌电光绿 / 琥珀金 / 战术红必须
+ *     在所有设备上保持一致，壁纸变化不应改变作战面板语义色。
+ *  3. **Expressive 形状与字体**：应用 [DfShapes] 与 [DfTypography]，与 Material 3 Expressive 对齐。
  *
- * 启用/关闭动态取色：通过 [dynamicColor] 参数控制（默认开启）。
+ * 注：保留 [darkTheme] / [dynamicColor] 形参是为了在 Settings 页未来可让用户单独开启个性化，
+ * 默认行为不启用。
  */
 @Composable
 fun DfCraftingTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    darkTheme: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> BrandDarkColorScheme
-        else -> BrandLightColorScheme
-    }
+    // 全局锁定深色调色板。dynamicColor 形参保留供将来扩展，默认不启用。
+    val colorScheme = BrandDarkColorScheme
+    @Suppress("UNUSED_VARIABLE")
+    val unusedLight = if (!darkTheme) BrandLightColorScheme else colorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -44,7 +37,7 @@ fun DfCraftingTheme(
     )
 }
 
-/** 品牌深色配色（无动态取色时的回退）。 */
+/** 品牌深色配色（应用全局深色主题）。 */
 private val BrandDarkColorScheme = darkColorScheme(
     primary = DfGreenPrimary,
     onPrimary = DfGreenOnPrimary,
@@ -84,7 +77,8 @@ private val BrandDarkColorScheme = darkColorScheme(
     inversePrimary = DfInversePrimaryDark,
 )
 
-/** 品牌浅色配色（暂未启用，保留扩展位）。 */
+/** 品牌浅色配色（保留扩展位，全局不使用）。 */
+@Suppress("unused")
 private val BrandLightColorScheme = lightColorScheme(
     primary = DfGreenContainer,
     onPrimary = DfGreenOnContainer,

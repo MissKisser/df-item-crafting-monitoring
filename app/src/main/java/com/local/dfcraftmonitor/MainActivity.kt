@@ -30,10 +30,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // 边到边布局，让 TopAppBar/NavigationBar 的 windowInsets 接管状态栏/导航栏
-        enableEdgeToEdge()
+        // 强制深色：状态栏图标浅色（夜间作战终端），不受系统浅色/深色模式切换影响
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         setContent {
-            // dynamicColor = true：Android 12+ 自动从系统壁纸取色
-            DfCraftingTheme(dynamicColor = true) {
+            // 全局深色：禁用 Monet 动态取色，固定使用品牌深色调色板
+            DfCraftingTheme(
+                darkTheme = true,
+                dynamicColor = false,
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
