@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 收益横幅：更亮的玻璃层渐变，与工位卡区分，突出盈亏数字。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="90"
+        android:startColor="#3A4870"
+        android:endColor="#2A3358"
+        android:type="linear" />
+    <corners android:radius="8dp" />
+</shape>

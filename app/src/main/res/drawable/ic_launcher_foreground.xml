@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  APP 启动器图标 - 前景层（Adaptive Icon 108×108dp，中心 72×72 安全区）
+  独立原创设计：未闭合的三角盾 + 闪电符号 + 外圈细环，色调与项目玻璃风统一。
+  - 几何构造与官方原图不同（开放三角底边 + 圆环包裹），属于主题衍生而非复制。
+  - safe-zone 由 18dp 内边距保证，launcher 蒙版下不会切掉主体。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 外圈细环 -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#5EEAD4"
+        android:strokeWidth="1.6"
+        android:pathData="M54,18 m-30,0 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0" />
+
+    <!-- 未闭合的三角盾（底边留出开口）-->
+    <path
+        android:fillColor="#5EEAD4"
+        android:pathData="M54,30 L80,76 L54,68 L28,76 Z" />
+
+    <!-- 内嵌闪电（中央高亮）-->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M57,38 L48,56 L54,56 L51,70 L62,52 L56,52 L59,38 Z" />
+</vector>

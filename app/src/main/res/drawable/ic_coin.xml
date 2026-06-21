@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Widget 盈亏小图标：圆形金币（外圈+内部 ¥ 符号 / 简化为同心圆+斜杠高光）。
+  颜色取自调色板 widget_accent_green / widget_warn_orange，与玻璃风卡片搭配。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="14dp"
+    android:height="14dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 圆形底 -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12c0,5.52 4.48,10 10,10s10,-4.48 10,-10S17.52,2 12,2z" />
+    <!-- 内圈高光 -->
+    <path
+        android:fillColor="#FCD34D"
+        android:pathData="M12,4C7.58,4 4,7.58 4,12c0,4.42 3.58,8 8,8s8,-3.58 8,-8C20,7.58 16.42,4 12,4z" />
+    <!-- 中央 ¥ 符号 -->
+    <path
+        android:fillColor="#7C2D12"
+        android:pathData="M12.5,6.5h-1v3.2L7.7,6.9l-1,1L10.2,11.4H7v1.5h3.6L7.4,15.9l0.9,1.1l3.2,-3.1v3.6h1.5v-3.6l3.2,3.1l0.9,-1.1l-3.2,-3.1H17v-1.5h-3.2l3.5,-3.5l-1,-1l-3.8,2.8V6.5z" />
+</vector>

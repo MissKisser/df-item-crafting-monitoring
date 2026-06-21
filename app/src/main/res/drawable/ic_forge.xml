@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget header 制造图标（锤头简化矢量，绿色强调）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="14dp"
+    android:height="14dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="@color/widget_accent_green">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M2.5,19.5 L4.2,21.2 L9.7,15.7 L8.0,14.0 Z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M13.9,2.6 L21.4,10.1 C22.1,10.8 22.1,12.0 21.4,12.7 L19.3,14.8 L9.2,4.7 L11.3,2.6 C12.0,1.9 13.2,1.9 13.9,2.6 Z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M8.4,5.5 L10.5,7.6 L7.5,10.6 L9.2,12.3 L12.2,9.3 L14.3,11.4 L11.3,14.4 L5.4,8.5 Z" />
+</vector>

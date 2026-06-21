@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget 调色板。此前颜色全为硬编码 hex，抽出来集中管理。 -->
+<resources>
+    <!-- 卡片背景 -->
+    <color name="widget_bg">#1C2230</color>
+    <color name="widget_station_bg">#262E42</color>
+    <!-- 文字 -->
+    <color name="widget_text_primary">#F3F4F6</color>
+    <color name="widget_text_secondary">#9AA7C7</color>
+    <color name="widget_text_muted">#5E6B8A</color>
+    <!-- 强调色 -->
+    <color name="widget_accent_green">#34D399</color>
+    <color name="widget_urgent_red">#F87171</color>
+    <color name="widget_warn_orange">#FBBF24</color>
+    <!-- 分隔线（半透明白） -->
+    <color name="widget_divider">#22FFFFFF</color>
+</resources>

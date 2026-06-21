@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 今日盈亏 2x1（横向）：2 格宽 × 1 格高,只显示数字。 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:initialLayout="@layout/widget_today_profit"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="900000"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_today_profit_desc"
+    android:previewLayout="@layout/widget_today_profit" />
