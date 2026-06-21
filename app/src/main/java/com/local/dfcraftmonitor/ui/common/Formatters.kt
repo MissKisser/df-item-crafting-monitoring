@@ -53,6 +53,31 @@ object Formatters {
     /** "yyyy-MM-dd" 今日日期字符串（CHINA 时区）。 */
     fun todayDateString(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(Date())
+
+    /** "yyyy-MM-dd" 昨日日期字符串（CHINA 时区）。 */
+    fun yesterdayDateString(): String {
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Shanghai"))
+        cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        return SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(cal.time)
+    }
+
+    /** 尝试把"yyyyMMdd" / "yyyy-MM-dd" / "yyyy/MM/dd" / "MM-dd" 各种格式都归一化为 "yyyy-MM-dd"，失败原样返回。 */
+    fun normalizeDate(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val trimmed = raw.trim()
+        val patterns = listOf("yyyy-MM-dd", "yyyy/MM/dd", "yyyyMMdd", "MM-dd")
+        for (p in patterns) {
+            val sdf = SimpleDateFormat(p, Locale.CHINA)
+            sdf.isLenient = false
+            runCatching {
+                val d = sdf.parse(trimmed)
+                if (d != null) {
+                    return SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(d)
+                }
+            }
+        }
+        return trimmed
+    }
 }
 
 /** 工具扩展：Long 千分位格式化（带负号）。 */

@@ -187,8 +187,20 @@ private fun AccountRow(
             )
         }
     } else null
+    // 头像优先：URL 非空时用 RemoteImage 渲染 40dp 圆框头像；空时回退到 Person 图标。
+    val avatarSlot: (@Composable () -> Unit)? = if (account.avatarUrl.isNotBlank()) {
+        {
+            com.local.dfcraftmonitor.ui.common.RemoteImage(
+                url = account.avatarUrl,
+                contentDescription = "账号头像",
+                modifier = Modifier.fillMaxSize(),
+                showContainer = false,
+            )
+        }
+    } else null
     SettingsRow(
-        icon = Icons.Outlined.Person,
+        icon = if (avatarSlot == null) Icons.Outlined.Person else null,
+        iconContent = avatarSlot,
         title = account.nickname.ifBlank { "未命名账号" },
         subtitle = account.areaName.ifBlank { "区服待同步" },
         trailing = checkmark,
@@ -198,7 +210,13 @@ private fun AccountRow(
 
 @Composable
 private fun SettingsRow(
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    /**
+     * 自定义图标内容（可空）。当不为空时，整个 40dp 圆形 avatar slot 由调用方渲染
+     * （例如账号头像走 RemoteImage），不再使用 [icon] 的 ImageVector。
+     * 注意：与 [icon] 二选一；当两者都不为 null 时以 [iconContent] 优先。
+     */
+    iconContent: (@Composable () -> Unit)? = null,
     title: String,
     subtitle: String? = null,
     trailing: @Composable (() -> Unit)? = null,
@@ -225,15 +243,27 @@ private fun SettingsRow(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .padding(8.dp),
+                .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
+            if (iconContent != null) {
+                // 头像等自定义内容填满整个 40dp 圆框
+                iconContent()
+            } else if (icon != null) {
+                // 默认 icon 缩小 8dp padding
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
         }
         Spacer(modifier = Modifier.size(14.dp))
         Column(modifier = Modifier.weight(1f)) {

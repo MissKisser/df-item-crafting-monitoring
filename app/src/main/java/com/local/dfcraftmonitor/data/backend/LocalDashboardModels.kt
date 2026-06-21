@@ -82,6 +82,11 @@ data class PlayerProfile(
 data class IncomeSummary(
     val amount: String,
     val rawValue: Long? = null,
+    /**
+     * 收益对应日期（yyyy-MM-dd 或 MM-dd），来自 solDetail 原始字段（如 statDate / dtStatDate / date）。
+     * 为空时表示"无数据 / 未提供"——UI 层应回退到"近日收益"。
+     */
+    val date: String? = null,
 ) {
     companion object {
         fun empty(): IncomeSummary = IncomeSummary("")

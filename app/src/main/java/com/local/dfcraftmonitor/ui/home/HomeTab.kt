@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material3.Button
@@ -30,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -148,31 +144,6 @@ private fun DailyBriefPanel(daySecrets: List<DaySecret>) {
 @Composable
 private fun DaySecretList(daySecrets: List<DaySecret>) {
     val listState = rememberLazyListState()
-    val scrollProgress by remember(daySecrets) {
-        derivedStateOf {
-            val total = daySecrets.size
-            if (total <= 1) {
-                0f
-            } else {
-                val info = listState.layoutInfo
-                if (info.totalItemsCount == 0) {
-                    0f
-                } else {
-                    val firstIdx = listState.firstVisibleItemIndex
-                    val firstOffset = listState.firstVisibleItemScrollOffset
-                    val itemSize = info.visibleItemsInfo.firstOrNull()?.size ?: 1
-                    (firstIdx.toFloat() + firstOffset.toFloat() / itemSize.coerceAtLeast(1)) /
-                        total.coerceAtLeast(1)
-                }
-            }.coerceIn(0f, 1f)
-        }
-    }
-    val canScroll by remember(listState) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            info.totalItemsCount > info.visibleItemsInfo.size
-        }
-    }
     LazyRow(
         state = listState,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -192,45 +163,18 @@ private fun DaySecretList(daySecrets: List<DaySecret>) {
             }
         }
     }
-    if (canScroll) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp)
-                .height(3.dp),
-        ) {
-            val trackWidthPx = maxWidth.value
-            val thumbFraction = 1f / daySecrets.size.coerceAtLeast(1)
-            val thumbWidthDp = maxWidth * thumbFraction
-            val maxOffsetDp = maxWidth - thumbWidthDp
-            val thumbOffsetDp = maxOffsetDp * scrollProgress
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                        RoundedCornerShape(1.5.dp),
-                    ),
-            )
-            Box(
-                modifier = Modifier
-                    .width(thumbWidthDp)
-                    .offset(x = thumbOffsetDp)
-                    .height(3.dp)
-                    .background(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                        RoundedCornerShape(1.5.dp),
-                    ),
-            )
-        }
-    }
+    // 滚动条已移除：避免它在 LazyRow 滚动时随滚动进度改变
+    // BoxWithConstraints 自身在父容器尺寸未稳定时也会触发二次重组，导致页面抖动。
+    // 用户已确认：滑动会影响页面布局，因此直接删除整段滑条 UI。
 }
 
 @Composable
 private fun DaySecretChip(item: DaySecret) {
+    // 统一宽度 68dp，所有地图（含巴克什）保持一致，
+    // 名称过长使用 ellipsis 截断，避免挤压相邻卡片。
     Column(
         modifier = Modifier
-            .width(84.dp)
+            .width(68.dp)
             .background(
                 MaterialTheme.colorScheme.surfaceVariant,
                 MaterialTheme.shapes.extraSmall,
@@ -240,8 +184,9 @@ private fun DaySecretChip(item: DaySecret) {
                 MaterialTheme.colorScheme.outline,
                 MaterialTheme.shapes.extraSmall,
             )
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .padding(horizontal = 6.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = item.mapName,
@@ -282,7 +227,7 @@ private fun IncomeCollectionPanel(
             contentPadding = PaddingValues(end = 8.dp),
             modifier = Modifier.padding(top = 10.dp),
         ) {
-            item(key = "yesterday-income") {
+            item(key = "recent-income") {
                 IncomeChip(
                     text = income.amount.ifBlank { "暂无" },
                     sign = when {
@@ -291,6 +236,7 @@ private fun IncomeCollectionPanel(
                     },
                     color = incomeColor(income),
                     hasData = income.rawValue != null,
+                    date = income.date,
                 )
             }
             if (collections.isEmpty()) {
@@ -318,7 +264,21 @@ private fun IncomeChip(
     sign: String,
     color: Color,
     hasData: Boolean,
+    date: String?,
 ) {
+    // 根据接口返回的日期决定标题：
+    //   - 是昨天 → "昨日收益 + MM-dd"
+    //   - 不是昨天 → "近日收益 + MM-dd"
+    //   - 无日期 → "近日收益"（回退）
+    val today = com.local.dfcraftmonitor.ui.common.Formatters.todayDateString()
+    val yesterday = com.local.dfcraftmonitor.ui.common.Formatters.yesterdayDateString()
+    val normalizedDate = com.local.dfcraftmonitor.ui.common.Formatters.normalizeDate(date)
+    val (title, showDate) = when (normalizedDate) {
+        yesterday -> "昨日收益" to normalizedDate
+        today -> "今日收益" to normalizedDate
+        null -> "近日收益" to null
+        else -> "近日收益" to normalizedDate
+    }
     Column(
         modifier = Modifier
             .width(116.dp)
@@ -332,12 +292,12 @@ private fun IncomeChip(
                 MaterialTheme.colorScheme.outline,
                 MaterialTheme.shapes.small,
             )
-            .padding(10.dp),
+            .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "昨日收益",
+            text = title,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
         )
@@ -350,6 +310,14 @@ private fun IncomeChip(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        if (showDate != null) {
+            Text(
+                text = showDate,
+                color = com.local.dfcraftmonitor.ui.theme.SemanticFaint,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }
 
@@ -506,52 +474,114 @@ private fun StationCard(
     nowMillis: Long,
     modifier: Modifier = Modifier,
 ) {
+    // 卡片背景：随制造物等级（grade）取色。
+    // grade=0 / 无数据 → 走 TacticalPanel 默认（surface），与"暂无制造物资"语义一致。
+    // 等级 2~7 → 用 gradeBackgroundColor（与小红卡/大红藏馆同款色板，保证一致性）。
+    val cardBg = if (station.grade in 2..7) {
+        gradeBackgroundColor(station.grade)
+    } else {
+        null
+    }
     Box(modifier = modifier.aspectRatio(1f)) {
-        TacticalPanel(modifier = Modifier.fillMaxSize()) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxSize(),
+        if (cardBg != null) {
+            // 等级配色覆盖：手画面板底色 + 描边，保留 TacticalPanel 的形状与内部布局。
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(cardBg, MaterialTheme.shapes.medium)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium)
+                    .padding(16.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant,
-                            MaterialTheme.shapes.small,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RemoteImage(
-                        url = station.iconUrl,
-                        contentDescription = station.itemName ?: station.placeName,
-                        modifier = Modifier
-                            .fillMaxWidth(0.78f)
-                            .aspectRatio(1f),
-                        showContainer = false,
-                    )
-                }
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.padding(top = 6.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    Text(
-                        text = station.itemName ?: "暂无制造物资",
-                        color = SemanticColors.onDarkSurface,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = formatRemaining(station, serverNowSeconds, nowMillis),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        RemoteImage(
+                            url = station.iconUrl,
+                            contentDescription = station.itemName ?: station.placeName,
+                            modifier = Modifier
+                                .fillMaxWidth(0.78f)
+                                .aspectRatio(1f),
+                            showContainer = false,
+                        )
+                    }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.padding(top = 6.dp),
+                    ) {
+                        Text(
+                            text = station.itemName ?: "暂无制造物资",
+                            color = SemanticColors.onDarkSurface,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = formatRemaining(station, serverNowSeconds, nowMillis),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        } else {
+            TacticalPanel(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                MaterialTheme.shapes.small,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        RemoteImage(
+                            url = station.iconUrl,
+                            contentDescription = station.itemName ?: station.placeName,
+                            modifier = Modifier
+                                .fillMaxWidth(0.78f)
+                                .aspectRatio(1f),
+                            showContainer = false,
+                        )
+                    }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.padding(top = 6.dp),
+                    ) {
+                        Text(
+                            text = station.itemName ?: "暂无制造物资",
+                            color = SemanticColors.onDarkSurface,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = formatRemaining(station, serverNowSeconds, nowMillis),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }

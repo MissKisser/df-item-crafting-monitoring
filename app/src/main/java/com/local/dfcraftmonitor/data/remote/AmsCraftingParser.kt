@@ -66,6 +66,14 @@ object AmsCraftingParser {
                     avgPrice = objectInfo?.let { optLongObject(it, "avgPrice") },
                     remainingSeconds = optLongObject(item, "leftTime"),
                     finishAtEpochSeconds = optLongObject(item, "pushTime"),
+                    // 制造物等级（来自 relateMap.objectPrice[x]）：
+                    //   优先 objectInfo.quality > objectInfo.grade > objectInfo.level。
+                    //   默认 0（灰）—— UI 层会回退到中性背景。
+                    grade = objectInfo?.let {
+                        optIntOrNull(it, "quality")
+                            ?: optIntOrNull(it, "grade")
+                            ?: optIntOrNull(it, "level")
+                    } ?: 0,
                 )
             }
         }
@@ -81,6 +89,13 @@ object AmsCraftingParser {
     private fun optLongObject(json: JSONObject, key: String): Long? {
         if (!json.has(key) || json.isNull(key)) return null
         return json.optLong(key)
+    }
+
+    /** 字段不存在或为 null 时返回 null；存在时尝试取 Int（0 视为缺省，避免等级 0/缺省混淆）。 */
+    private fun optIntOrNull(json: JSONObject, key: String): Int? {
+        if (!json.has(key) || json.isNull(key)) return null
+        val v = json.optInt(key, 0)
+        return v.takeIf { it > 0 }
     }
 
     private val AUTH_EXPIRED_KEYWORDS = listOf("登录", "未登录", "授权", "已过期", "失效")

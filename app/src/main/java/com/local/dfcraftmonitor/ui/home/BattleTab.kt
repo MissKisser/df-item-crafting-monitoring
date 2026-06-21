@@ -277,8 +277,10 @@ private fun MatchCard(match: MatchRecord, onOpen: () -> Unit) {
                         .weight(1f)
                         .padding(end = 8.dp),
                 ) {
+                    // 顺序：干员 → 模式/结果 → 地图 → 击败/用时
+                    // （干员与"地图/结果"位置对调：干员放最上以强调身份）
                     Text(
-                        text = match.mapName.ifBlank { "未知地图" },
+                        text = "干员 ${match.operatorName.ifBlank { "未知" }}",
                         color = SemanticColors.onDarkSurface,
                         style = MaterialTheme.typography.titleMedium,
                     )
@@ -288,13 +290,14 @@ private fun MatchCard(match: MatchRecord, onOpen: () -> Unit) {
                         style = MaterialTheme.typography.labelMedium,
                     )
                     Text(
-                        text = "干员 ${match.operatorName.ifBlank { "未知" }}",
+                        text = "地图 ${match.mapName.ifBlank { "未知地图" }}",
                         color = SemanticColors.onDarkSurface,
                         style = MaterialTheme.typography.labelMedium,
                     )
+                    // 击败/用时：白字（用户要求 5）
                     Text(
                         text = "击败 ${match.operatorKills.ifBlank { "0" }} · 用时 ${match.duration.ifBlank { "-" }}",
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }

@@ -406,9 +406,13 @@ object AmsDashboardParser {
         val solDetail = data.optJSONObject("solDetail")
         val value = solDetail?.firstLong("recentGain")
             ?: data.firstLong("yesterdayIncome", "yesterdayProfit", "lastDayIncome", "dailyIncome")
+        // 收益对应日期：优先 solDetail.statDate / dtStatDate；顶层 dailyDate 兜底
+        val date = solDetail?.firstString("statDate", "dtStatDate", "date", "dtEventTime", "createTime")
+            ?: data.firstString("dailyDate", "yesterdayDate", "statDate", "date")
         return IncomeSummary(
             amount = value?.formatWanPrice().orEmpty(),
             rawValue = value,
+            date = date.takeIf { it.isNotBlank() },
         )
     }
 

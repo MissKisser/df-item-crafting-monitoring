@@ -88,6 +88,7 @@ class SnapshotCache @Inject constructor(
             val avgPrice: Long?,
             val remainingSeconds: Long?,
             val finishAtEpochSeconds: Long?,
+            val grade: Int = 0,
         )
 
         companion object {
@@ -105,6 +106,7 @@ class SnapshotCache @Inject constructor(
                         avgPrice = s.avgPrice,
                         remainingSeconds = s.remainingSeconds,
                         finishAtEpochSeconds = s.finishAtEpochSeconds,
+                        grade = s.grade,
                     )
                 },
             )
@@ -125,6 +127,7 @@ class SnapshotCache @Inject constructor(
                     avgPrice = d.avgPrice,
                     remainingSeconds = d.remainingSeconds,
                     finishAtEpochSeconds = d.finishAtEpochSeconds,
+                    grade = d.grade,
                 )
             },
         )
