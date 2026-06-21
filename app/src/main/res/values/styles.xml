@@ -4,4 +4,61 @@
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:navigationBarColor">#f6f7f9</item>
     </style>
+
+    <!-- ====== Widget 工位行（纵向，用于组合卡横向行） ====== -->
+    <style name="WidgetStationRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">20dp</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingTop">2dp</item>
+        <item name="android:paddingBottom">2dp</item>
+    </style>
+
+    <!-- 工位名（次要蓝灰） -->
+    <style name="WidgetStationPlace">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">0.9</item>
+        <item name="android:textColor">@color/widget_text_muted</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <!-- 物品名（亮白） -->
+    <style name="WidgetStationItem">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1.6</item>
+        <item name="android:textColor">@color/widget_text_primary</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <!-- 倒计时（粗，彩色，右对齐） -->
+    <style name="WidgetStationTimer">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minWidth">52dp</item>
+        <item name="android:gravity">end</item>
+        <item name="android:textColor">@color/widget_text_primary</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:visibility">gone</item>
+    </style>
+
+    <!-- 状态文字（已完成/空闲，右对齐） -->
+    <style name="WidgetStationStatus">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minWidth">52dp</item>
+        <item name="android:gravity">end</item>
+        <item name="android:textColor">@color/widget_text_muted</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:singleLine">true</item>
+    </style>
 </resources>
