@@ -16,7 +16,7 @@ if (localPropsFile.exists()) {
 def qqAppId = localProps.getProperty("qq.appId", "")
 def dfWebLoginUrl = localProps.getProperty(
         "df.webLoginUrl",
-        "https://pvp.qq.com/cp/a20161115tyf/page1.shtml"
+        "https://df.qq.com/cp/a20241230webmp/index.html"
 )
 
 android {
@@ -85,10 +85,6 @@ dependencies {
 
     // DataStore Preferences（spec 8.1 同步结果本地存储；M2 阶段只存最近快照用于 diff）
     implementation "androidx.datastore:datastore-preferences:1.1.1"
-
-    // Glance（spec M3 桌面卡片，Jetpack Compose-first）
-    implementation "androidx.glance:glance-appwidget:1.1.1"
-    implementation "androidx.glance:glance-material3:1.1.1"
 
     // 网络：OkHttp + Retrofit（Retrofit 2.11+ 自带 kotlinx-serialization 官方转换器）
     implementation "com.squareup.okhttp3:okhttp:4.12.0"

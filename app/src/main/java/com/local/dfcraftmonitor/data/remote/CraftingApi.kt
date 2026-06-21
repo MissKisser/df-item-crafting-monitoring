@@ -2,6 +2,7 @@ package com.local.dfcraftmonitor.data.remote
 
 import okhttp3.ResponseBody
 import retrofit2.http.Field
+import retrofit2.http.FieldMap
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -32,5 +33,12 @@ interface CraftingApi {
         @Field("method") method: String,
         @Field("source") source: String = "2",
         @Field("param") param: String = "{}",
+    ): ResponseBody
+
+    @FormUrlEncoded
+    @POST
+    suspend fun postForm(
+        @Url url: String,
+        @FieldMap fields: Map<String, String>,
     ): ResponseBody
 }

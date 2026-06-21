@@ -4,42 +4,75 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.local.dfcraftmonitor.data.AppDataCleaner
 import com.local.dfcraftmonitor.data.backend.LocalDashboardData
+import com.local.dfcraftmonitor.data.model.AccountEntry
 import com.local.dfcraftmonitor.data.model.AmsCredential
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
+import com.local.dfcraftmonitor.data.monitor.WidgetCache
 import com.local.dfcraftmonitor.data.remote.AmsCraftingParser
 import com.local.dfcraftmonitor.data.repository.CraftingRepository
 import com.local.dfcraftmonitor.ui.login.SessionHolder
-import com.local.dfcraftmonitor.widget.WidgetRefresher
+import com.local.dfcraftmonitor.widget.WidgetUpdater
 import com.local.dfcraftmonitor.work.WorkScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * 主界面 ViewModel。负责拉特勤处快照 + 状态管理。
- *
- * spec M2：refresh() 失败时区分 AuthExpired（提示用户重新登录）和通用错误。
- */
+data class SeasonOption(
+    val id: Int,
+    val label: String,
+    val isAllSeason: Boolean = false,
+)
+
+val SEASON_OPTIONS = listOf(
+    SeasonOption(9, "当前赛季(S9)", false),
+    SeasonOption(8, "S8", false),
+    SeasonOption(7, "S7", false),
+    SeasonOption(6, "S6", false),
+    SeasonOption(5, "S5", false),
+    SeasonOption(4, "S4", false),
+    SeasonOption(3, "S3", false),
+    SeasonOption(2, "S2", false),
+    SeasonOption(1, "S1", false),
+    SeasonOption(9, "全部赛季", true),
+)
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val craftingRepository: CraftingRepository,
     private val sessionHolder: SessionHolder,
     private val appDataCleaner: AppDataCleaner,
     private val workScheduler: WorkScheduler,
-    private val widgetRefresher: WidgetRefresher,
+    private val widgetUpdater: WidgetUpdater,
+    private val widgetCache: WidgetCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<UiState>(UiState.Loading)
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    private val _dashboard = MutableStateFlow(craftingRepository.fallbackDashboard())
+    private val _dashboard = MutableStateFlow(LocalDashboardData.empty())
     val dashboard: StateFlow<LocalDashboardData> = _dashboard.asStateFlow()
+
+    private val _selectedSeason = MutableStateFlow(SEASON_OPTIONS.first())
+    val selectedSeason: StateFlow<SeasonOption> = _selectedSeason.asStateFlow()
+
+    private val _seasonLoading = MutableStateFlow(false)
+    val seasonLoading: StateFlow<Boolean> = _seasonLoading.asStateFlow()
 
     init {
         refresh()
+        // 监听当前账号变化：从设置页切账号后回到 Home 时自动刷新数据
+        sessionHolder.changes
+            .map { it.currentAccountId }
+            .distinctUntilChanged()
+            .onEach { refresh() }
+            .launchIn(viewModelScope)
     }
 
     fun refresh() {
@@ -53,10 +86,13 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             refreshDashboard(credential)
             craftingRepository.fetchCrafting(credential)
-                .onSuccess {
-                    _state.value = UiState.Success(it)
-                    // 刷新桌面卡片（spec 8.1：手动刷新成功后更新 widget）
-                    widgetRefresher.refresh()
+                .onSuccess { snapshot ->
+                    _state.value = UiState.Success(snapshot)
+                    val accountId = sessionHolder.getCurrentEntry()?.accountId
+                    if (accountId != null) {
+                        widgetCache.updateFromSync(accountId, snapshot)
+                    }
+                    widgetUpdater.updateAll()
                 }
                 .onFailure { e ->
                     _state.value = when (e) {
@@ -71,28 +107,86 @@ class HomeViewModel @Inject constructor(
     private fun refreshDashboard(credential: AmsCredential?) {
         viewModelScope.launch {
             craftingRepository.fetchDashboard(credential)
-                .onSuccess { _dashboard.value = it }
+                .onSuccess { dashboard ->
+                    _dashboard.value = dashboard
+                    val profile = dashboard.profile
+                    val accountId = sessionHolder.getCurrentEntry()?.accountId
+                    if (accountId != null) {
+                        widgetCache.updateFromDashboard(accountId, dashboard)
+                        widgetUpdater.updateAll()
+                        sessionHolder.updateCurrentProfile(
+                            nickname = profile.nickname,
+                            avatarUrl = profile.avatarUrl,
+                            areaName = profile.areaName,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun switchSeason(season: SeasonOption) {
+        val credential = sessionHolder.get() ?: return
+        if (season == _selectedSeason.value) return
+        _selectedSeason.value = season
+        _seasonLoading.value = true
+        viewModelScope.launch {
+            craftingRepository.fetchSolCareer(credential, season.id, season.isAllSeason)
+                .onSuccess { solProfile ->
+                    val current = _dashboard.value
+                    val merged = solProfile.copy(
+                        nickname = current.profile.nickname,
+                        avatarUrl = current.profile.avatarUrl,
+                        areaName = current.profile.areaName,
+                    )
+                    _dashboard.value = current.copy(profile = merged)
+                }
+            _seasonLoading.value = false
+        }
+    }
+
+    /** 切换账号。 */
+    fun switchAccount(accountId: String) {
+        val entry = sessionHolder.switchTo(accountId) ?: return
+        widgetCache.setCurrentAccountId(entry.accountId)
+        workScheduler.start()
+        refresh()
+    }
+
+    /** 凭据失效：清除当前账号 token（保留资料），停止同步。 */
+    fun onAuthExpired() {
+        sessionHolder.clearCurrentSession()
+        workScheduler.cancel()
+    }
+
+    /** 重新登录：清除当前会话并跳转登录页。 */
+    fun reLogin(onNavigateToLogin: () -> Unit) {
+        viewModelScope.launch {
+            sessionHolder.clearCurrentSession()
+            workScheduler.cancel()
+            onNavigateToLogin()
         }
     }
 
     /**
-     * 用户点"重新登录"按钮：清掉 SessionHolder，跳回 LoginScreen。
-     * WorkManager 调度也停掉。
+     * 退出当前账号：移除账号条目，自动切换到下一个。
+     * 有其他账号则刷新数据；无账号则回调通知 UI 跳登录页。
      */
-    fun onAuthExpired() {
-        sessionHolder.clear()
-        workScheduler.cancel()
+    fun logoutCurrent(onNoAccountsLeft: () -> Unit) {
+        viewModelScope.launch {
+            val next = appDataCleaner.logoutCurrent()
+            if (next != null) {
+                refresh()
+            } else {
+                onNoAccountsLeft()
+            }
+        }
     }
 
     fun accountMenuInfo(): AccountMenuInfo {
         val credential = sessionHolder.get()
         val currentState = state.value
         return AccountMenuInfo(
-            account = if (credential == null) {
-                "未登录"
-            } else {
-                "已登录"
-            },
+            account = if (credential == null) "未登录" else "已登录",
             accountMark = if (credential == null) "访客模式" else "账号已保护",
             deltaRole = when (currentState) {
                 is UiState.Success -> "已绑定（三角洲特勤处，${currentState.snapshot.stations.size} 个工位）"
@@ -104,12 +198,9 @@ class HomeViewModel @Inject constructor(
         )
     }
 
-    fun clearDataAndLogout(onCleared: () -> Unit) {
-        viewModelScope.launch {
-            appDataCleaner.clearAll()
-            onCleared()
-        }
-    }
+    fun listAccounts(): List<AccountEntry> = sessionHolder.listAccounts()
+
+    fun getCurrentAccount(): AccountEntry? = sessionHolder.getCurrentEntry()
 
     sealed interface UiState {
         data object Loading : UiState

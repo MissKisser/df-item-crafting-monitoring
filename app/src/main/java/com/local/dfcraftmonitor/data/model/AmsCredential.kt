@@ -14,6 +14,9 @@ data class AmsCredential(
     val appid: String,
     val accessToken: String,
 ) {
+    val platform: AmsAccountPlatform
+        get() = AmsAccountPlatform.fromAcctype(acctype)
+
     fun isComplete(): Boolean =
         openid.isNotBlank() && acctype.isNotBlank() && appid.isNotBlank() && accessToken.isNotBlank()
 
@@ -33,5 +36,39 @@ data class AmsCredential(
         /** 显式四参数版本，用于从 Cookie 解析（修复 Java 版丢失 acctype 的 bug）。 */
         fun create(openid: String, acctype: String, appid: String, accessToken: String): AmsCredential =
             AmsCredential(openid, acctype, appid, accessToken)
+    }
+}
+
+data class AmsAccountPlatform(
+    val areaName: String,
+    val sArea: String,
+    val gameAppId: String,
+    val channelKey: String,
+    val acctypeAliases: Set<String>,
+) {
+    companion object {
+        val QQ = AmsAccountPlatform(
+            areaName = "QQ区",
+            sArea = "1",
+            gameAppId = "101491592",
+            channelKey = "qq",
+            acctypeAliases = setOf("qc", "qq"),
+        )
+
+        val WECHAT = AmsAccountPlatform(
+            areaName = "微信区",
+            sArea = "3",
+            gameAppId = "wx1cd4fbe9335888fe",
+            channelKey = "weixin",
+            acctypeAliases = setOf("wx", "weixin", "wechat"),
+        )
+
+        fun fromAcctype(acctype: String): AmsAccountPlatform {
+            val normalized = acctype.trim().lowercase()
+            return when {
+                normalized in WECHAT.acctypeAliases -> WECHAT
+                else -> QQ
+            }
+        }
     }
 }

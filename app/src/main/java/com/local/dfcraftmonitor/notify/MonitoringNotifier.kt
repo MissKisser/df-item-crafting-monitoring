@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.local.dfcraftmonitor.MainActivity
+import com.local.dfcraftmonitor.R
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
 import com.local.dfcraftmonitor.data.model.CraftingStation
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -50,7 +51,7 @@ class MonitoringNotifier @Inject constructor(
         val pausePi = pendingBroadcast(NotificationIntents.ACTION_PAUSE_SYNC, 1)
 
         val notification = NotificationCompat.Builder(context, NotificationChannels.MONITORING)
-            .setSmallIcon(0)  // TODO M2.1: 加专用通知图标资源
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setSubText("最近同步 " + formatTime(snapshot.fetchedAtEpochMillis))

@@ -67,4 +67,19 @@ class AmsCredentialTest {
         assertNotEquals(base, AmsCredential.create("o", "qc", "a2", "t"))
         assertNotEquals(base, AmsCredential.create("o", "qc", "a", "t2"))
     }
+
+    @Test
+    fun platformDerivesTencentAreaAndGameAppId() {
+        val qq = AmsCredential.create("o", "qc", "1110543085", "t").platform
+        assertEquals("QQ区", qq.areaName)
+        assertEquals("1", qq.sArea)
+        assertEquals("101491592", qq.gameAppId)
+        assertEquals("qq", qq.channelKey)
+
+        val wechat = AmsCredential.create("o", "wx", "wx1cd4fbe9335888fe", "t").platform
+        assertEquals("微信区", wechat.areaName)
+        assertEquals("3", wechat.sArea)
+        assertEquals("wx1cd4fbe9335888fe", wechat.gameAppId)
+        assertEquals("weixin", wechat.channelKey)
+    }
 }

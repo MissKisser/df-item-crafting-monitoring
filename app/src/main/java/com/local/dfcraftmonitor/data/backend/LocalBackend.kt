@@ -8,17 +8,9 @@ interface LocalBackend {
 
     suspend fun getDashboard(credential: AmsCredential?): Result<LocalDashboardData>
 
-    fun getFallbackDashboard(): LocalDashboardData
-
-    fun getToolCategories(): List<String>
-
-    fun getToolObjects(): List<ToolObjectSummary>
-
-    fun getDaySecrets(): List<DaySecret>
-
-    fun getMaps(): List<MapSummary>
-
-    fun getHomeBannerImageUrl(): String
-
-    fun getProfileImageUrl(): String
+    suspend fun fetchSolCareer(
+        credential: AmsCredential,
+        seasonId: Int,
+        isAllSeason: Boolean,
+    ): Result<PlayerProfile>
 }

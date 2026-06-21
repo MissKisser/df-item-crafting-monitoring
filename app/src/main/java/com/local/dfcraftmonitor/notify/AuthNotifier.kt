@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.local.dfcraftmonitor.MainActivity
+import com.local.dfcraftmonitor.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,7 +23,7 @@ class AuthNotifier @Inject constructor(
     fun notifyAuthExpired(reason: String) {
         val openPi = pendingActivity(0)
         val notification = NotificationCompat.Builder(context, NotificationChannels.AUTH_STATE)
-            .setSmallIcon(0)  // TODO M2.1
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("登录已失效")
             .setContentText(reason)
             .setStyle(NotificationCompat.BigTextStyle().bigText("$reason\n请重新登录以恢复后台监控。"))
@@ -38,7 +39,7 @@ class AuthNotifier @Inject constructor(
     fun notifyLoggedOut() {
         val openPi = pendingActivity(0)
         val notification = NotificationCompat.Builder(context, NotificationChannels.AUTH_STATE)
-            .setSmallIcon(0)  // TODO M2.1
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("后台监控已停止")
             .setContentText("已退出登录。重新登录以恢复特勤处监控。")
             .setContentIntent(openPi)

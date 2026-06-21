@@ -1,12 +1,10 @@
 package com.local.dfcraftmonitor.data.repository
 
-import com.local.dfcraftmonitor.data.backend.DaySecret
 import com.local.dfcraftmonitor.data.model.AmsCredential
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
 import com.local.dfcraftmonitor.data.backend.LocalBackend
 import com.local.dfcraftmonitor.data.backend.LocalDashboardData
-import com.local.dfcraftmonitor.data.backend.MapSummary
-import com.local.dfcraftmonitor.data.backend.ToolObjectSummary
+import com.local.dfcraftmonitor.data.backend.PlayerProfile
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,17 +24,10 @@ class CraftingRepository @Inject constructor(
     suspend fun fetchDashboard(credential: AmsCredential?): Result<LocalDashboardData> =
         localBackend.getDashboard(credential)
 
-    fun fallbackDashboard(): LocalDashboardData = localBackend.getFallbackDashboard()
-
-    fun toolCategories(): List<String> = localBackend.getToolCategories()
-
-    fun toolObjects(): List<ToolObjectSummary> = localBackend.getToolObjects()
-
-    fun daySecrets(): List<DaySecret> = localBackend.getDaySecrets()
-
-    fun maps(): List<MapSummary> = localBackend.getMaps()
-
-    fun homeBannerImageUrl(): String = localBackend.getHomeBannerImageUrl()
-
-    fun profileImageUrl(): String = localBackend.getProfileImageUrl()
+    suspend fun fetchSolCareer(
+        credential: AmsCredential,
+        seasonId: Int,
+        isAllSeason: Boolean,
+    ): Result<PlayerProfile> =
+        localBackend.fetchSolCareer(credential, seasonId, isAllSeason)
 }

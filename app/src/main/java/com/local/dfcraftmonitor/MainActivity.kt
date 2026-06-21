@@ -6,15 +6,12 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.local.dfcraftmonitor.ui.home.HomeScreen
 import com.local.dfcraftmonitor.ui.login.LoginScreen
 import com.local.dfcraftmonitor.ui.login.SessionHolder
@@ -24,11 +21,6 @@ import com.local.dfcraftmonitor.ui.theme.DfCraftingTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
-/**
- * 单 Activity 入口。NavHost 串起 Login ↔ Home。
- *
- * V2 起始终进入主界面：无登录也可以浏览公开/本地后端降级数据，需要账号数据时再进入 Login。
- */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -48,6 +40,7 @@ class MainActivity : ComponentActivity() {
 
 private object Routes {
     const val LOGIN = "login"
+    const val LOGIN_ADD = "login?addMode=true"
     const val HOME = "home"
     const val SETTINGS = "settings"
     const val PRIVACY = "privacy"
@@ -65,6 +58,18 @@ private fun DfNavGraph(sessionHolder: SessionHolder) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
+                isAddingAccount = false,
+            )
+        }
+        composable(
+            route = Routes.LOGIN_ADD,
+        ) {
+            LoginScreen(
+                onLoggedIn = {
+                    navController.popBackStack(Routes.SETTINGS, false)
+                },
+                isAddingAccount = true,
+                onBack = { navController.popBackStack() },
             )
         }
         composable(Routes.HOME) {
@@ -83,6 +88,9 @@ private fun DfNavGraph(sessionHolder: SessionHolder) {
             SettingsScreen(
                 onNavigateToPrivacy = {
                     navController.navigate(Routes.PRIVACY)
+                },
+                onAddAccount = {
+                    navController.navigate(Routes.LOGIN_ADD)
                 },
                 onLogout = {
                     navController.navigate(Routes.LOGIN) {

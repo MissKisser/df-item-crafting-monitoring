@@ -18,20 +18,28 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.local.dfcraftmonitor.data.remote.AmsConstants
 
 private const val TAG = "DfLoginWebView"
+private const val WEBMP_LOGIN_HOST = "df.qq.com"
+private const val LEGACY_LOGIN_HOST = "pvp.qq.com"
+
+enum class LoginMethod(val jsValue: String) {
+    QQ("qq"),
+    WECHAT("wechat"),
+}
 
 /**
  * 内嵌登录 WebView。
  *
- * 登录流程（pvp.qq.com 页面分析）：
- * 1. 用户在主页面上看到 [#dologin] 按钮
- * 2. 点击后弹窗让用户选择登录方式（微信 / QQ）
- * 3. LoginManager.loginByWXAndQQ() 创建匿名 iframe 加载登录页面
+ * 登录流程：
+ * 1. 官方 WebMP 页面（df.qq.com）通过 Milo 登录 SDK 写入 AMS 四元组
+ * 2. 旧 PVP 页面保留 LoginManager 兜底，便于历史环境继续可用
+ * 3. Cookie 轮询检测登录完成（不依赖 postMessage）
  *
  * 自动点击 + 登录检测：
  * - 进入页面后注入 JS，自动调用 initLogin() 触发登录
@@ -40,12 +48,15 @@ private const val TAG = "DfLoginWebView"
 @Composable
 fun LoginWebView(
     initialUrl: String,
+    loginMethod: LoginMethod,
     refreshSignal: Int = 0,
     onLoginSuccess: (Map<String, String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val currentLoginMethod = rememberUpdatedState(loginMethod)
     var loginDetected by remember { mutableStateOf(false) }
     var lastRefreshSignal by remember { mutableStateOf(refreshSignal) }
+    var lastLoginMethod by remember { mutableStateOf(loginMethod) }
     val harvester = remember { CookieHarvester() }
 
     DisposableEffect(Unit) {
@@ -62,6 +73,7 @@ fun LoginWebView(
                 )
                 configureWebView(
                     harvester = harvester,
+                    loginMethodProvider = { currentLoginMethod.value },
                     onCookiesReady = { cookies ->
                         if (!loginDetected && harvester.isLoginComplete(cookies)) {
                             loginDetected = true
@@ -73,8 +85,9 @@ fun LoginWebView(
             }
         },
         update = { webView ->
-            if (lastRefreshSignal != refreshSignal) {
+            if (lastRefreshSignal != refreshSignal || lastLoginMethod != loginMethod) {
                 lastRefreshSignal = refreshSignal
+                lastLoginMethod = loginMethod
                 loginDetected = false
                 webView.loadUrl(initialUrl)
             }
@@ -109,6 +122,7 @@ private class DfLoginBridge(
  */
 private fun WebView.configureWebView(
     harvester: CookieHarvester,
+    loginMethodProvider: () -> LoginMethod,
     onCookiesReady: (Map<String, String>) -> Unit,
 ) {
     settings.apply {
@@ -177,7 +191,7 @@ private fun WebView.configureWebView(
 
         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
             super.onPageStarted(view, url, favicon)
-            if (url != null && url.contains("pvp.qq.com")) {
+            if (url != null && isLegacyLoginUrl(url)) {
                 // 页面开始加载时立即注入早期 hook（在 LoginManager 加载前准备）
                 view.evaluateJavascript(JS_EARLY_HOOK, null)
             }
@@ -195,8 +209,11 @@ private fun WebView.configureWebView(
             super.onPageFinished(view, url)
             CookieManager.getInstance().flush()
 
-            if (url.contains("pvp.qq.com")) {
-                view.evaluateJavascript(JS_AUTO_LOGIN, null)
+            if (isLegacyLoginUrl(url) || isWebMpLoginUrl(url)) {
+                view.evaluateJavascript(autoLoginScript(loginMethodProvider()), null)
+            }
+
+            if (isLegacyLoginUrl(url)) {
                 startLoginDialogScaling(view)
             }
 
@@ -284,6 +301,12 @@ private fun WebView.configureWebView(
     }
 }
 
+private fun isLegacyLoginUrl(url: String): Boolean =
+    url.contains(LEGACY_LOGIN_HOST)
+
+private fun isWebMpLoginUrl(url: String): Boolean =
+    url.contains(WEBMP_LOGIN_HOST)
+
 // ========================================================================
 // JS 脚本
 // ========================================================================
@@ -350,10 +373,14 @@ private const val JS_EARLY_HOOK = """
  * 2. 直接点击 #dologin
  * 3. 直接调用 LoginManager.login()
  */
-private const val JS_AUTO_LOGIN = """
+private fun autoLoginScript(loginMethod: LoginMethod): String =
+    JS_AUTO_LOGIN_TEMPLATE.replace("__LOGIN_METHOD__", loginMethod.jsValue)
+
+private const val JS_AUTO_LOGIN_TEMPLATE = """
 (function() {
     if (window.__dfAutoLoginStarted) return;
     window.__dfAutoLoginStarted = true;
+    window.__dfPreferredLoginMethod = '__LOGIN_METHOD__';
 
     var MAX_RETRIES = 30;
     var retryCount = 0;
@@ -496,7 +523,221 @@ private const val JS_AUTO_LOGIN = """
         }, 250);
     }
 
+    function installWechatChoiceAutoClicker() {
+        if (window.__dfPreferredLoginMethod !== 'wechat') return false;
+        if (window.__dfWechatChoiceAutoClickerInstalled) return true;
+        window.__dfWechatChoiceAutoClickerInstalled = true;
+
+        function isVisibleElement(el) {
+            if (!el || !el.getBoundingClientRect) return false;
+            var rect = el.getBoundingClientRect();
+            var style = window.getComputedStyle(el);
+            return rect.width > 8 &&
+                rect.height > 8 &&
+                style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                style.opacity !== '0';
+        }
+
+        function compactText(el) {
+            var text = (el.innerText || el.textContent || '').replace(/\s+/g, '');
+            var aria = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title'))) || '';
+            return (text || aria || '').replace(/\s+/g, '');
+        }
+
+        function markerText(el) {
+            if (!el || !el.getAttribute) return '';
+            var className = '';
+            try {
+                className = typeof el.className === 'string' ? el.className : '';
+            } catch (e) {}
+            return [
+                el.id || '',
+                className,
+                el.getAttribute('data-type') || '',
+                el.getAttribute('data-login') || '',
+                el.getAttribute('name') || ''
+            ].join(' ').toLowerCase();
+        }
+
+        function looksLikeWechatChoice(el) {
+            var text = compactText(el);
+            if (text.indexOf('微信') !== -1 && text.indexOf('QQ') === -1 && text.length <= 16) {
+                return true;
+            }
+            var marker = markerText(el);
+            return (marker.indexOf('wechat') !== -1 || marker.indexOf('wx') !== -1) &&
+                marker.indexOf('qq') === -1;
+        }
+
+        function clickableTarget(el) {
+            var node = el;
+            var depth = 0;
+            while (node && node !== document.body && depth < 5) {
+                var tag = (node.tagName || '').toUpperCase();
+                var role = node.getAttribute && node.getAttribute('role');
+                var marker = markerText(node);
+                if (
+                    tag === 'BUTTON' ||
+                    tag === 'A' ||
+                    role === 'button' ||
+                    typeof node.onclick === 'function' ||
+                    marker.indexOf('btn') !== -1 ||
+                    marker.indexOf('login') !== -1 ||
+                    marker.indexOf('wechat') !== -1 ||
+                    marker.indexOf('wx') !== -1
+                ) {
+                    return node;
+                }
+                node = node.parentElement;
+                depth++;
+            }
+            return el;
+        }
+
+        function clickWechatLoginChoice() {
+            if (window.__dfPreferredLoginMethod !== 'wechat') return false;
+            if (window.__dfWechatChoiceClicked) return true;
+
+            var candidates = document.querySelectorAll(
+                'button, a, [role="button"], [class*=wx], [class*=wechat], [id*=wx], [id*=wechat], div, span, li'
+            );
+            for (var i = 0; i < candidates.length; i++) {
+                var candidate = candidates[i];
+                if (!isVisibleElement(candidate) || !looksLikeWechatChoice(candidate)) continue;
+
+                var target = clickableTarget(candidate);
+                if (!isVisibleElement(target)) target = candidate;
+                if (target && !target.disabled) {
+                    window.__dfWechatChoiceClicked = true;
+                    bridgeLog('auto clicking official wechat login choice');
+                    target.click();
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        window.__dfClickWechatLoginChoice = clickWechatLoginChoice;
+
+        var attempts = 0;
+        var timer = setInterval(function() {
+            attempts++;
+            if (clickWechatLoginChoice() || attempts >= 120) {
+                clearInterval(timer);
+            }
+        }, 250);
+
+        var observer = new MutationObserver(function() {
+            if (clickWechatLoginChoice()) {
+                observer.disconnect();
+                clearInterval(timer);
+            }
+        });
+
+        function observe() {
+            var root = document.documentElement || document.body;
+            if (!root) {
+                setTimeout(observe, 50);
+                return;
+            }
+            observer.observe(root, { childList: true, subtree: true, attributes: true });
+            clickWechatLoginChoice();
+        }
+        observe();
+        return true;
+    }
+
     installPtloginFrameCapture();
+    installWechatChoiceAutoClicker();
+
+    function reloadAfterLogin() {
+        bridgeLog('login callback, reloading page');
+        window.location.reload();
+    }
+
+    function officialReturnUrl() {
+        return window.location.href.split('#')[0];
+    }
+
+    function officialQqParams() {
+        return {
+            appId: "101491592",
+            scope: "get_user_info",
+            state: "STATE",
+            redirectUri: "https://milo.qq.com/comm-htdocs/login/qc_redirect.html",
+            sUrl: officialReturnUrl(),
+            callback: reloadAfterLogin,
+            showParams: { needReloadPage: true }
+        };
+    }
+
+    function officialWxParams() {
+        return {
+            appId: "wxfa0c35392d06b82f",
+            gameDomain: "iu.qq.com",
+            lang: "zh_CN",
+            callback: reloadAfterLogin,
+            fail: function(err) {
+                bridgeLog('official wechat scan login failed: ' + err);
+            }
+        };
+    }
+
+    function tryMiloLogin() {
+        if (typeof Milo === 'undefined') return false;
+
+        var preferred = window.__dfPreferredLoginMethod || 'qq';
+        window.iUseQQConnect = 1;
+
+        if (preferred === 'wechat') {
+            if (window.__dfWechatChoiceClicked) {
+                bridgeLog('wechat choice already clicked; skipping official combined fallback');
+                return true;
+            }
+            if (typeof window.__dfClickWechatLoginChoice === 'function' && window.__dfClickWechatLoginChoice()) {
+                bridgeLog('wechat visible choice clicked synchronously; skipping official combined fallback');
+                return true;
+            }
+            if (typeof Milo.loginByWxDelegate === 'function') {
+                bridgeLog('starting official wechat scan login via Milo.loginByWxDelegate');
+                Milo.loginByWxDelegate(officialWxParams());
+                return true;
+            }
+            if (typeof Milo.loginByQQConnectAndWX === 'function') {
+                bridgeLog('falling back to official pc combined login for wechat');
+                Milo.loginByQQConnectAndWX({
+                    oQQConnectParams: officialQqParams(),
+                    oWXParams: officialWxParams()
+                });
+                return true;
+            }
+        }
+
+        if (preferred !== 'wechat') {
+            if (typeof Milo.mobileLoginByQQConnect === 'function') {
+                bridgeLog('starting official qq login via Milo.mobileLoginByQQConnect');
+                Milo.mobileLoginByQQConnect(officialQqParams());
+                return true;
+            }
+            if (typeof Milo.loginByQQConnect === 'function') {
+                bridgeLog('starting official qq login via Milo.loginByQQConnect');
+                Milo.loginByQQConnect(officialQqParams());
+                return true;
+            }
+        }
+
+        if (typeof Milo.loginByQQConnectAndWX === 'function') {
+            bridgeLog('falling back to official combined pc login');
+            Milo.loginByQQConnectAndWX({
+                oQQConnectParams: officialQqParams(),
+                oWXParams: officialWxParams()
+            });
+            return true;
+        }
+
+        return false;
+    }
 
     function hookOpenLoginDiv() {
         if (typeof LoginManager === 'undefined') return false;
@@ -518,33 +759,76 @@ private const val JS_AUTO_LOGIN = """
         retryCount++;
         if (retryCount > MAX_RETRIES) return;
 
-        // 策略1：劫持 LoginManager 后调用 initLogin
-        if (hookOpenLoginDiv()) {
-            if (typeof initLogin === 'function') {
-                initLogin();
-                return;
-            }
-        }
+        if (tryMiloLogin()) return;
 
-        // 策略2：直接点击登录按钮
-        var dologin = document.getElementById('dologin');
-        if (dologin) {
-            dologin.click();
-            setTimeout(function() {
-                var qqBtn = document.querySelector('.myqqlogin');
-                if (qqBtn) qqBtn.click();
-            }, 200);
+        if (typeof need !== 'function') {
+            bridgeLog('Milo/need() is not ready, retrying login bootstrap');
+            setTimeout(tryAutoLogin, 300);
             return;
         }
 
-        // 策略3：直接调用 LoginManager.login()
-        if (typeof LoginManager !== 'undefined' && typeof LoginManager.login === 'function') {
-            LoginManager.login();
-            return;
+        try {
+            need("biz.login", function(LoginManager) {
+                var preferred = window.__dfPreferredLoginMethod || 'qq';
+                window.iUseQQConnect = 1;
+
+                if (LoginManager && typeof LoginManager.init === 'function') {
+                    LoginManager.init({ iUseQQConnect: 1, userinfoSpan: "login_qq_span" });
+                }
+
+                if (preferred === 'wechat' && LoginManager && typeof LoginManager.loginByWx === 'function') {
+                    bridgeLog('starting wechat login via LoginManager.loginByWx');
+                    LoginManager.loginByWx({
+                        appId: "wx1cd4fbe9335888fe",
+                        gameDomain: "iu.qq.com",
+                        callback: function() {
+                            bridgeLog('wechat login callback');
+                            window.location.reload();
+                        },
+                        fail: function(err) {
+                            bridgeLog('wechat login failed: ' + err);
+                        }
+                    });
+                    return;
+                }
+
+                if (preferred !== 'wechat' && LoginManager && typeof LoginManager.login === 'function') {
+                    bridgeLog('starting qq login via LoginManager.login');
+                    LoginManager.login();
+                    return;
+                }
+
+                if (LoginManager && typeof LoginManager.loginByWXAndQQ === 'function') {
+                    bridgeLog('falling back to LoginManager.loginByWXAndQQ');
+                    LoginManager.loginByWXAndQQ(
+                        {
+                            appId: "wx1cd4fbe9335888fe",
+                            gameDomain: "iu.qq.com",
+                            iUseQQConnect: 1,
+                            callback: function() {
+                                bridgeLog('combined wechat login callback');
+                                window.location.reload();
+                            },
+                            fail: function(err) {
+                                bridgeLog('combined login failed: ' + err);
+                            }
+                        },
+                        function() {
+                            bridgeLog('combined qq login callback');
+                            window.location.reload();
+                        }
+                    );
+                    return;
+                }
+
+                bridgeLog('LoginManager has no supported login API, retrying');
+                setTimeout(tryAutoLogin, 300);
+            });
+        } catch (e) {
+            bridgeLog('login bootstrap failed: ' + (e && e.message ? e.message : e));
+            setTimeout(tryAutoLogin, 300);
         }
 
-        // 重试
-        setTimeout(tryAutoLogin, 300);
     }
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {

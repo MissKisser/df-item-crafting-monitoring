@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.local.dfcraftmonitor.MainActivity
+import com.local.dfcraftmonitor.R
 import com.local.dfcraftmonitor.data.model.CraftingStation
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.text.SimpleDateFormat
@@ -31,7 +32,7 @@ class CompletionNotifier @Inject constructor(
 
         val openPi = pendingActivityForStation(station)
         val notification = NotificationCompat.Builder(context, NotificationChannels.CRAFTING_COMPLETE)
-            .setSmallIcon(0)  // TODO M2.1: 加专用通知图标资源
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setSubText("完成 " + formatTime(station.finishAtEpochSeconds))

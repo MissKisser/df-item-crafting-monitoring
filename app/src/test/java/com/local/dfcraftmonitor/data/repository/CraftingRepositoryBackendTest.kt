@@ -1,10 +1,8 @@
 package com.local.dfcraftmonitor.data.repository
 
 import com.local.dfcraftmonitor.data.backend.LocalBackend
-import com.local.dfcraftmonitor.data.backend.DaySecret
 import com.local.dfcraftmonitor.data.backend.LocalDashboardData
-import com.local.dfcraftmonitor.data.backend.MapSummary
-import com.local.dfcraftmonitor.data.backend.ToolObjectSummary
+import com.local.dfcraftmonitor.data.backend.PlayerProfile
 import com.local.dfcraftmonitor.data.model.AmsCredential
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
 import com.local.dfcraftmonitor.data.model.CraftingStation
@@ -55,29 +53,12 @@ class CraftingRepositoryBackendTest {
         }
 
         override suspend fun getDashboard(credential: AmsCredential?): Result<LocalDashboardData> =
-            Result.success(fallbackDashboard)
+            Result.success(LocalDashboardData.empty())
 
-        override fun getFallbackDashboard(): LocalDashboardData = fallbackDashboard
-
-        override fun getToolCategories(): List<String> = emptyList()
-
-        override fun getToolObjects(): List<ToolObjectSummary> = emptyList()
-
-        override fun getDaySecrets(): List<DaySecret> = emptyList()
-
-        override fun getMaps(): List<MapSummary> = emptyList()
-
-        override fun getHomeBannerImageUrl(): String = "https://example.test/banner.png"
-
-        override fun getProfileImageUrl(): String = "https://example.test/profile.png"
-
-        private val fallbackDashboard = LocalDashboardData(
-            toolCategories = emptyList(),
-            toolObjects = emptyList(),
-            daySecrets = emptyList(),
-            maps = emptyList(),
-            homeBannerImageUrl = "https://example.test/banner.png",
-            profileImageUrl = "https://example.test/profile.png",
-        )
+        override suspend fun fetchSolCareer(
+            credential: AmsCredential,
+            seasonId: Int,
+            isAllSeason: Boolean,
+        ): Result<PlayerProfile> = Result.success(PlayerProfile.empty())
     }
 }

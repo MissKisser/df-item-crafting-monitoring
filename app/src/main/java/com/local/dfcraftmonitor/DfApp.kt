@@ -3,7 +3,10 @@ package com.local.dfcraftmonitor
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.local.dfcraftmonitor.data.account.AccountStore
+import com.local.dfcraftmonitor.data.monitor.WidgetCache
 import com.local.dfcraftmonitor.notify.NotificationChannels
+import com.local.dfcraftmonitor.widget.WidgetRefreshReceiver
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -19,6 +22,8 @@ import javax.inject.Inject
 class DfApp : Application(), Configuration.Provider {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
+    @Inject lateinit var accountStore: AccountStore
+    @Inject lateinit var widgetCache: WidgetCache
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -29,5 +34,14 @@ class DfApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         NotificationChannels.ensureChannels(this)
+        mirrorCurrentAccountForWidgets()
+    }
+
+    private fun mirrorCurrentAccountForWidgets() {
+        val accountId = accountStore.currentAccountId() ?: return
+        if (accountStore.find(accountId) != null) {
+            widgetCache.setCurrentAccountId(accountId)
+            WidgetRefreshReceiver.restoreCachedViews(this)
+        }
     }
 }

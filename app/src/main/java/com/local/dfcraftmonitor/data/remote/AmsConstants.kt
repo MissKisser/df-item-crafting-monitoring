@@ -20,6 +20,9 @@ object AmsConstants {
     const val CRAFTING_BASE_URL =
         "https://comm.ams.game.qq.com/ide/"
 
+    const val CRAFTING_CHART_ID = "365589"
+    const val CRAFTING_IDE_TOKEN = "bQaMCQ"
+
     const val CRAFTING_QUERY_PARAMS =
-        "iChartId=365589&iSubChartId=365589&sIdeToken=bQaMCQ&source=2"
+        "iChartId=$CRAFTING_CHART_ID&iSubChartId=$CRAFTING_CHART_ID&sIdeToken=$CRAFTING_IDE_TOKEN&source=2"
 }

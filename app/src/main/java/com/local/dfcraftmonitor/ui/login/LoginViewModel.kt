@@ -1,42 +1,77 @@
 package com.local.dfcraftmonitor.ui.login
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.local.dfcraftmonitor.data.WebSessionCleaner
+import com.local.dfcraftmonitor.data.backend.LocalDashboardData
 import com.local.dfcraftmonitor.data.model.AmsCredential
+import com.local.dfcraftmonitor.data.monitor.WidgetCache
+import com.local.dfcraftmonitor.data.remote.AmsCraftingParser
 import com.local.dfcraftmonitor.data.remote.CookieUtils
+import com.local.dfcraftmonitor.data.repository.CraftingRepository
 import com.local.dfcraftmonitor.work.WorkScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * 登录 ViewModel。WebView 自动判定登录成功后回调 [onLoginSuccess]，
- * 这里把 cookies 解析成 [AmsCredential] 存入 [SessionHolder]，并发射
- * [UiState.LoggedIn] 通知上层跳转。
+ * 登录 ViewModel。支持多账号模式。
  *
- * 登录成功时也会启动 WorkManager 周期同步（spec M2）。
+ * - 首次登录（addMode=false）：解析 Cookie → 保存账号 → 启动同步 → 拉取资料
+ * - 新增账号（addMode=true）：先调用 [prepareFreshLogin] 清空 WebView Cookie → 扫码 →
+ *   检查 openid 去重（已存在则停留在登录页提示用户） → 保存 → 拉取资料
+ *
+ * 登录成功后异步拉取仪表盘数据填充昵称/头像/大区，更新 AccountEntry 和 WidgetCache。
  */
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val sessionHolder: SessionHolder,
     private val workScheduler: WorkScheduler,
+    private val craftingRepository: CraftingRepository,
+    private val widgetCache: WidgetCache,
+    private val webSessionCleaner: WebSessionCleaner,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<UiState>(UiState.LoggingIn)
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    private val _freshLoginReady = MutableStateFlow(false)
+    /** addMode 下 Cookie 清空完成、可以挂载 WebView 的信号。 */
+    val freshLoginReady: StateFlow<Boolean> = _freshLoginReady.asStateFlow()
+
+    /** 新增账号模式标记，由导航设置。 */
+    var isAddingAccount: Boolean = false
+
     /**
-     * WebView 自动调用（或未来手动重试入口）。
-     * 返回构造好的 credential（同时也存进了 SessionHolder）。
+     * addMode 下进入页面时调用：清空 WebView Cookie / 缓存 / DOM Storage，
+     * 防止 WebView 用上一账号的缓存自动登录、跳过扫码。
+     * 清空完成后 [freshLoginReady] 置 true，UI 此时再挂载 WebView。
      */
-    fun onCookiesHarvested(cookies: Map<String, String>): AmsCredential? {
-        val amsDomainCookie = cookies["comm.ams.game.qq.com"].orEmpty()
-        val cookieSource = if (amsDomainCookie.isNotEmpty()) {
-            amsDomainCookie
-        } else {
-            cookies.values.joinToString("; ")
+    fun prepareFreshLogin() {
+        if (_freshLoginReady.value) return
+        viewModelScope.launch {
+            runCatching { webSessionCleaner.clear() }
+            _state.value = UiState.LoggingIn
+            _freshLoginReady.value = true
         }
+    }
+
+    fun onCookiesHarvested(cookies: Map<String, String>): AmsCredential? {
+        val cookieSource = listOf(
+            cookies["pvp.qq.com"].orEmpty(),
+            cookies["comm.ams.game.qq.com"].orEmpty(),
+            cookies["game.qq.com"].orEmpty(),
+            cookies.values.joinToString("; "),
+        ).firstOrNull { source ->
+            val parsed = CookieUtils.parseCookieString(source)
+            parsed["openid"].orEmpty().isNotBlank() &&
+                parsed["acctype"].orEmpty().isNotBlank() &&
+                parsed["appid"].orEmpty().isNotBlank() &&
+                parsed["access_token"].orEmpty().isNotBlank()
+        }.orEmpty()
         val parsed = CookieUtils.parseCookieString(cookieSource)
         val credential = AmsCredential.create(
             openid = parsed["openid"].orEmpty(),
@@ -45,13 +80,13 @@ class LoginViewModel @Inject constructor(
             accessToken = parsed["access_token"].orEmpty(),
         )
         return if (credential.isComplete()) {
-            sessionHolder.set(credential)
-            // 登录成功 → 启动 WorkManager 周期同步（spec M2）
+            val entry = sessionHolder.set(credential)
+            widgetCache.setCurrentAccountId(entry.accountId)
             workScheduler.start()
             _state.value = UiState.LoggedIn
+            fetchProfileInBackground(credential, entry.accountId)
             credential
         } else {
-            // 诊断信息：显示哪些字段缺失 + 哪些域有 Cookie
             val missing = buildList {
                 if (parsed["openid"].isNullOrEmpty()) add("openid")
                 if (parsed["acctype"].isNullOrEmpty()) add("acctype")
@@ -65,6 +100,21 @@ class LoginViewModel @Inject constructor(
                     "请确认扫码后等待页面跳转完成"
             )
             null
+        }
+    }
+
+    private fun fetchProfileInBackground(credential: AmsCredential, accountId: String) {
+        viewModelScope.launch {
+            craftingRepository.fetchDashboard(credential)
+                .onSuccess { dashboard ->
+                    val profile = dashboard.profile
+                    sessionHolder.updateCurrentProfile(
+                        nickname = profile.nickname,
+                        avatarUrl = profile.avatarUrl,
+                        areaName = profile.areaName,
+                    )
+                    widgetCache.updateFromDashboard(accountId, dashboard)
+                }
         }
     }
 
