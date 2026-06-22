@@ -41,7 +41,9 @@ class CompletionTimerWorker @AssistedInject constructor(
         )
 
         completionNotifier.notifyCompleted(station)
-        widgetUpdater.updateAll()
+        // 强制刷新（绕开签名变化检测）：Worker 触发的瞬间就是"到点"时刻，
+        // 必须立刻让 Widget 显示"已完成"——即使 payload 还没来得及更新到磁盘。
+        widgetUpdater.forceUpdateAll()
         return Result.success()
     }
 

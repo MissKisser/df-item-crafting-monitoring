@@ -19,6 +19,20 @@ object WidgetRemoteViewsBuilder {
 
     private const val MAX_STATIONS = 4
 
+    /**
+     * 最后 1 分钟阈值：工位剩余时间 ≤ 此值时，Widget 不再渲染 Chronometer，
+     * 直接显示"已完成"。这是防止 Chronometer 越过 base 进入负数的核心防御。
+     *
+     * 为什么选 60s：
+     *  - Chronometer 的时间分辨率 = 1s，最后 1 分钟内的视觉差异微弱
+     *  - 1 分钟 = 4 个 15 分钟同步周期之内，签名几乎必刷新（用户手动刷、Worker 触发都覆盖）
+     *  - 选更大阈值（如 300s）会损失用户体验——用户想看精确倒计时
+     *  - 选更小阈值（如 5s）则可能因为 WorkManager 延迟到点 > 阈值而出现负数
+     *
+     * 注：此常量与 [WidgetRemoteViewsApplier] 的"提前 60s 视作 completed"必须保持一致。
+     */
+    const val LAST_MINUTE_CUTOFF_SECONDS = 60L
+
     // 与 res/values/colors.xml 调色板对齐（RemoteViews 无法引用 @color，故用 ARGB 常量）。
     private const val COLOR_TEXT_PRIMARY = 0xFFF3F4F6.toInt()
     private const val COLOR_TEXT_SECONDARY = 0xFF9AA7C7.toInt()
@@ -98,24 +112,30 @@ object WidgetRemoteViewsBuilder {
 
             val remaining = station.remainingSeconds
             if (remaining != null && remaining > 0) {
-                val finishAt = station.finishAtEpochSeconds
-                if (finishAt != null) {
-                    val nowEpochSeconds = System.currentTimeMillis() / 1000
-                    val remainingMillis = (finishAt - nowEpochSeconds) * 1000
-                    if (remainingMillis > 0) {
-                        val base = SystemClock.elapsedRealtime() + remainingMillis
-                        views.setChronometer(timerId(i), base, null, true)
-                        views.setTextColor(timerId(i), getRemainingColor(remaining))
-                        views.setViewVisibility(timerId(i), android.view.View.VISIBLE)
-                        views.setViewVisibility(statusId(i), android.view.View.GONE)
-                    } else {
-                        showCompleted(views, i)
-                    }
+                // 修复负数显示：最后 1 分钟不再渲染 Chronometer，
+                // 直接走 showCompleted。这与 [WidgetRemoteViewsApplier] 的签名提前窗口保持一致。
+                if (remaining <= LAST_MINUTE_CUTOFF_SECONDS) {
+                    showCompleted(views, i)
                 } else {
-                    views.setTextViewText(statusId(i), formatRemaining(remaining))
-                    views.setTextColor(statusId(i), getRemainingColor(remaining))
-                    views.setViewVisibility(timerId(i), android.view.View.GONE)
-                    views.setViewVisibility(statusId(i), android.view.View.VISIBLE)
+                    val finishAt = station.finishAtEpochSeconds
+                    if (finishAt != null) {
+                        val nowEpochSeconds = System.currentTimeMillis() / 1000
+                        val remainingMillis = (finishAt - nowEpochSeconds) * 1000
+                        if (remainingMillis > 0) {
+                            val base = SystemClock.elapsedRealtime() + remainingMillis
+                            views.setChronometer(timerId(i), base, null, true)
+                            views.setTextColor(timerId(i), getRemainingColor(remaining))
+                            views.setViewVisibility(timerId(i), android.view.View.VISIBLE)
+                            views.setViewVisibility(statusId(i), android.view.View.GONE)
+                        } else {
+                            showCompleted(views, i)
+                        }
+                    } else {
+                        views.setTextViewText(statusId(i), formatRemaining(remaining))
+                        views.setTextColor(statusId(i), getRemainingColor(remaining))
+                        views.setViewVisibility(timerId(i), android.view.View.GONE)
+                        views.setViewVisibility(statusId(i), android.view.View.VISIBLE)
+                    }
                 }
             } else if (remaining != null && remaining <= 0) {
                 showCompleted(views, i)
