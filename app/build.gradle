@@ -48,6 +48,28 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    // Release 签名：keystore 路径与密码从 local.properties 读取（不入仓）。
+    // 默认密码与 alias 与项目内置 debug-release.keystore 配套，
+    // 正式发版请自行生成 keystore 并覆盖 local.properties 的字段。
+    signingConfigs {
+        release {
+            def ksFile = file("debug-release.keystore")
+            if (ksFile.exists()) {
+                storeFile ksFile
+                storePassword localProps.getProperty("release.storePassword", "androiddebug")
+                keyAlias localProps.getProperty("release.keyAlias", "dfcraftmonitor")
+                keyPassword localProps.getProperty("release.keyPassword", "androiddebug")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
 }
 
 dependencies {

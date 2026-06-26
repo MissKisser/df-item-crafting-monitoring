@@ -8,6 +8,11 @@ app/build/
 # 本地配置（不跟踪）
 local.properties
 
+# Release 签名密钥（不入仓；正式发版请用项目专属密钥并单独管理）
+app/*.keystore
+app/*.jks
+app/keystore.properties
+
 # 第三方依赖（应放 maven/google 而不是仓库里）
 third_party/
 app/libs/
