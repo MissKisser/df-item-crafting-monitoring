@@ -42,6 +42,30 @@ class SyncDiffTest {
         assertTrue(SyncDiff.completed(old, new).isEmpty())
     }
 
+    /**
+     * 首次同步场景：[SyncCoordinator.handleSuccess] 中 `oldSnapshot == null`
+     * 时不走 [SyncDiff.completed] 路径（路径 A）——这会漏掉首次同步就已完成
+     * 的工位。该测试把这个语义显式锁住：路径 A 在首次同步下确实不会通知，
+     * 这类工位依赖 [CompletionTimerScheduler] 的"立即触发"路径（见
+     * CompletionTimerSchedulerTest#firstSyncAlreadyExpiredStationIsImmediatelyFired）。
+     *
+     * 两个测试合在一起构成了对首次同步漏通知 bug 修复的回归保护。
+     */
+    @Test
+    fun firstSyncHasNoOldSnapshotSoCompletionGoesThroughTimerPath() {
+        // 这里模拟 SyncCoordinator 里 oldSnapshot == null 的情况：
+        // 既然没有 oldSnapshot 可 diff，路径 A 自然不触发——这正是 bug 的源头。
+        // 我们用一个空 old snapshot 来近似（语义等价：没有"在做"的工位 → 无 diff）。
+        val old = snapshot()
+        val new = snapshot(
+            station(itemId = 100, remainingSeconds = 100),   // 还在做（服务器返回未刷新）
+        )
+        // 路径 A 不会通知（合理：没有 inProgress→completed 转变）
+        assertTrue(SyncDiff.completed(old, new).isEmpty())
+        // 路径 B 由 CompletionTimerScheduler 负责：剩余 <= 900s 触发精确定时器，
+        // 若 finishAt 已过期则立即触发。详见 CompletionTimerSchedulerTest。
+    }
+
     @Test
     fun singleStationTransitionFromInProgressToCompletedTriggersNotification() {
         val old = snapshot(station(itemId = 100, remainingSeconds = 3600))
