@@ -33,8 +33,8 @@ class SyncCoordinator @Inject constructor(
     private val widgetCache: WidgetCache,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val completionTimerScheduler: CompletionTimerScheduler,
-) {
-    suspend fun syncOnce(): SyncOutcome {
+) : SyncEngine {
+    override suspend fun syncOnce(): SyncOutcome {
         val credential = sessionHolder.get()
         if (credential == null) {
             authNotifier.notifyLoggedOut()

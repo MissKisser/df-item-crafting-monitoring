@@ -29,7 +29,7 @@ import javax.inject.Singleton
 @Singleton
 class SnapshotCache @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : SnapshotStore {
     private val Context.snapshotStore: DataStore<Preferences> by preferencesDataStore(
         name = "snapshot_cache",
     )
@@ -42,7 +42,7 @@ class SnapshotCache @Inject constructor(
      * 存最近一份快照（覆盖写）。Worker 同步成功后调用。
      * stations 序列化为精简视图避免膨胀。
      */
-    fun save(snapshot: CraftingSnapshot) {
+    override fun save(snapshot: CraftingSnapshot) {
         val payload = SnapshotPayload.from(snapshot)
         val text = json.encodeToString(SnapshotPayload.serializer(), payload)
         runBlocking {
@@ -53,7 +53,7 @@ class SnapshotCache @Inject constructor(
     /**
      * 读最近一份快照，无则返回 null。Worker 同步前调，用于 diff。
      */
-    fun load(): CraftingSnapshot? {
+    override fun load(): CraftingSnapshot? {
         val text = runBlocking {
             context.snapshotStore.data.first()[key]
         } ?: return null

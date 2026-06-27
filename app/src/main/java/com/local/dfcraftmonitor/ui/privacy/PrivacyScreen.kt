@@ -130,7 +130,7 @@ fun PrivacyScreen(
                 TacticalPanel {
                     BulletLine("OkHttp / Retrofit：网络请求（仅与官方页面交互）")
                     BulletLine("Hilt：依赖注入（编译时）")
-                    BulletLine("WorkManager：后台任务调度（仅在本机执行）")
+                    BulletLine("系统级后台调度：本机内的制造倒计时与完成通知")
                     BulletLine("Jetpack Compose / Material 3：UI 框架")
                 }
             }

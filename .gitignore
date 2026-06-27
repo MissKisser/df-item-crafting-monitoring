@@ -3,6 +3,7 @@
 .idea/
 build/
 app/build/
+.kotlin/
 *.iml
 
 # 本地配置（不跟踪）

@@ -7,8 +7,9 @@ import com.local.dfcraftmonitor.data.backend.LocalDashboardData
 import com.local.dfcraftmonitor.data.model.AccountEntry
 import com.local.dfcraftmonitor.data.model.AmsCredential
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
+import com.local.dfcraftmonitor.data.monitor.GlobalRefreshController
+import com.local.dfcraftmonitor.data.monitor.SyncOutcome
 import com.local.dfcraftmonitor.data.monitor.WidgetCache
-import com.local.dfcraftmonitor.data.remote.AmsCraftingParser
 import com.local.dfcraftmonitor.data.repository.CraftingRepository
 import com.local.dfcraftmonitor.ui.login.SessionHolder
 import com.local.dfcraftmonitor.widget.WidgetUpdater
@@ -51,6 +52,7 @@ class HomeViewModel @Inject constructor(
     private val workScheduler: WorkScheduler,
     private val widgetUpdater: WidgetUpdater,
     private val widgetCache: WidgetCache,
+    private val globalRefreshController: GlobalRefreshController,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<UiState>(UiState.Loading)
@@ -66,7 +68,26 @@ class HomeViewModel @Inject constructor(
     val seasonLoading: StateFlow<Boolean> = _seasonLoading.asStateFlow()
 
     init {
-        refresh()
+        // VM 创建时不再触发 refresh —— 由 MainActivity.onCreate 调全局控制器，
+        // 避免冷启动时两次并发请求（VM init + onCreate）。
+        // 订阅全局控制器的结果 SharedFlow 更新 UiState：
+        //  - snapshots 成功 → Success(snapshot)
+        //  - outcomes 失败 → Error / AuthExpired
+        //  这样页面 UI 与 AppBar 旋转状态共享同一份"同步事实"。
+        globalRefreshController.snapshots
+            .onEach { snapshot -> _state.value = UiState.Success(snapshot) }
+            .launchIn(viewModelScope)
+        globalRefreshController.outcomes
+            .onEach { outcome ->
+                _state.value = when (outcome) {
+                    is SyncOutcome.AuthExpired ->
+                        UiState.AuthExpired("登录已失效，请重新绑定账号。")
+                    is SyncOutcome.TransientFailure -> UiState.Error(outcome.reason)
+                    else -> _state.value
+                }
+            }
+            .launchIn(viewModelScope)
+
         // 监听当前账号变化：从设置页切账号后回到 Home 时自动刷新数据
         sessionHolder.changes
             .map { it.currentAccountId }
@@ -75,6 +96,14 @@ class HomeViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    /**
+     * 触发完整同步 —— 委派给 [GlobalRefreshController]。
+     *
+     * UiState 不会立刻切到 Loading，因为 AppBar 旋转图标已经给用户"正在刷新"的反馈，
+     * 避免页面内 Spinner 与 AppBar 旋转图标双重表达造成视觉噪音。
+     *
+     * dashboard 数据（玩家档案/今日盈亏）不走 SyncCoordinator，仍由本 VM 拉取。
+     */
     fun refresh() {
         val credential = sessionHolder.get()
         if (credential == null) {
@@ -82,25 +111,9 @@ class HomeViewModel @Inject constructor(
             refreshDashboard(null)
             return
         }
-        _state.value = UiState.Loading
         viewModelScope.launch {
             refreshDashboard(credential)
-            craftingRepository.fetchCrafting(credential)
-                .onSuccess { snapshot ->
-                    _state.value = UiState.Success(snapshot)
-                    val accountId = sessionHolder.getCurrentEntry()?.accountId
-                    if (accountId != null) {
-                        widgetCache.updateFromSync(accountId, snapshot)
-                    }
-                    widgetUpdater.updateAll()
-                }
-                .onFailure { e ->
-                    _state.value = when (e) {
-                        is AmsCraftingParser.AuthExpiredException ->
-                            UiState.AuthExpired("登录已失效，请重新绑定账号。")
-                        else -> UiState.Error("同步异常，请稍后重试。")
-                    }
-                }
+            globalRefreshController.refreshAsync()
         }
     }
 
