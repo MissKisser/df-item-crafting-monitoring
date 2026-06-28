@@ -86,6 +86,10 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        // 关键：内层 Scaffold 的 contentWindowInsets 必须设为空，
+        // 否则它会重复消费 statusBars（外层 MainActivity.Scaffold 已经消化过 TopAppBar 高度），
+        // 导致 LazyColumn 顶部多出 ~36dp（1080x2400 设备实测 111px）的"幽灵"空白。
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = { HomeBottomBar(selected = selectedTab, onSelected = { selectedTab = it }) },
     ) { padding ->
         Box(
