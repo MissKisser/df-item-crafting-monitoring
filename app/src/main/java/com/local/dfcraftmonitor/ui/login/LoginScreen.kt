@@ -1,29 +1,25 @@
 package com.local.dfcraftmonitor.ui.login
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,16 +39,18 @@ import com.local.dfcraftmonitor.ui.theme.SemanticColors
 /**
  * 登录页。支持首次登录和新增账号两种模式。
  *
- * - 首次登录：标题"登录"，无返回按钮，直接挂载 WebView
- * - 新增账号：标题"新增账号"，有返回按钮；进入页面先清空 WebView Cookie（防止自动登录），
- *   清空完成后再挂载 WebView，顶部横幅提示"请扫码登录新账号"
+ * - 首次登录：标题"登录"，GlobalTopBar 提供返回箭头
+ * - 新增账号：标题"新增账号"，GlobalTopBar 提供返回箭头；进入页面先清空 WebView Cookie
+ *   （防止自动登录），清空完成后再挂载 WebView，顶部横幅提示"请扫码登录新账号"
+ *
+ * 顶部 AppBar 由 [com.local.dfcraftmonitor.MainActivity] 统一挂载（spec "全局刷新"），
+ * 故本组件不再自带 TopAppBar / Scaffold。"刷新登录页面"按钮（仅重载 WebView，与
+ * GlobalTopBar 的全局刷新不同）改放在内容区顶部靠右。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     onLoggedIn: () -> Unit,
     isAddingAccount: Boolean = false,
-    onBack: (() -> Unit)? = null,
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(isAddingAccount) {
@@ -75,58 +73,35 @@ fun LoginScreen(
 
     val showWebView = !isAddingAccount || freshLoginReady
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (isAddingAccount) "新增账号" else "登录",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "返回",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    if (showWebView) {
-                        IconButton(onClick = { refreshSignal++ }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Refresh,
-                                contentDescription = "刷新登录页面",
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.primary,
-                ),
-                windowInsets = WindowInsets.statusBars,
-            )
-        },
-    ) { padding ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(MaterialTheme.colorScheme.background),
+            modifier = Modifier.fillMaxSize(),
         ) {
             if (isAddingAccount) {
                 AddAccountBanner()
+            }
+
+            // 局部"刷新登录页面"按钮：仅重载 WebView（refreshSignal++），
+            // 不触发 GlobalTopBar 的全局监控数据刷新。靠右放避免与登录方式选择器争抢视觉重心。
+            if (showWebView) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    IconButton(onClick = { refreshSignal++ }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Refresh,
+                            contentDescription = "刷新登录页面",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
 
             LoginMethodSelector(

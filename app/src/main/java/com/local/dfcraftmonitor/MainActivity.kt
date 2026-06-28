@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -84,9 +86,12 @@ private fun DfNavGraph(
     val refreshState by globalRefreshController.state.collectAsStateWithLifecycle()
 
     // 仅在 HOME 路由显示 Settings 入口（spec "设置入口上移到顶栏"）。
-    // 其他路由（Settings/Privacy/Login）由各自页面提供返回按钮。
+    // 其他路由（Settings/Privacy/Login）由 GlobalTopBar 的 navigationIcon 提供返回按钮。
     val onSettingsClick: (() -> Unit)? = if (currentRoute == Routes.HOME) {
         { navController.navigate(Routes.SETTINGS) }
+    } else null
+    val onNavigationClick: (() -> Unit)? = if (currentRoute != Routes.HOME) {
+        { navController.popBackStack() }
     } else null
 
     Scaffold(
@@ -97,6 +102,8 @@ private fun DfNavGraph(
                 refreshState = refreshState,
                 onRefresh = { globalRefreshController.refreshAsync() },
                 onSettingsClick = onSettingsClick,
+                navigationIcon = onNavigationClick?.let { Icons.AutoMirrored.Filled.ArrowBack },
+                onNavigationClick = onNavigationClick,
             )
         },
     ) { padding ->
@@ -124,7 +131,6 @@ private fun DfNavGraph(
                             navController.popBackStack(Routes.SETTINGS, false)
                         },
                         isAddingAccount = true,
-                        onBack = { navController.popBackStack() },
                     )
                 }
                 composable(Routes.HOME) {
@@ -152,13 +158,10 @@ private fun DfNavGraph(
                                 popUpTo(0) { inclusive = true }
                             }
                         },
-                        onBack = { navController.popBackStack() },
                     )
                 }
                 composable(Routes.PRIVACY) {
-                    PrivacyScreen(
-                        onBack = { navController.popBackStack() },
-                    )
+                    PrivacyScreen()
                 }
             }
         }
