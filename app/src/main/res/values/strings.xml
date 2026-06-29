@@ -4,8 +4,14 @@
     <string name="widget_crafting_detail_label">制造详情</string>
     <string name="widget_today_profit_label">今日盈亏</string>
     <string name="widget_combined_label">制造/盈亏</string>
+    <string name="widget_day_secret_label">今日密码</string>
     <!-- Widget 描述（无障碍） -->
     <string name="widget_crafting_detail_desc">特勤处制造详情，含实时倒计时</string>
     <string name="widget_today_profit_desc">今日盈亏概览</string>
     <string name="widget_combined_desc">制造详情 + 今日盈亏组合卡片</string>
+    <string name="widget_day_secret_desc">每张地图今日密码（最多 4 个）</string>
+    <!-- 今日密码 Widget 配置页 -->
+    <string name="widget_day_secret_account_default">待同步</string>
+    <string name="widget_day_secret_configure_title">配置今日密码桌面卡</string>
+    <string name="widget_day_secret_unselected">未选</string>
 </resources>

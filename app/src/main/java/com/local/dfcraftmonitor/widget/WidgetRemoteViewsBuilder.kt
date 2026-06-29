@@ -69,6 +69,77 @@ object WidgetRemoteViewsBuilder {
         return views
     }
 
+    /** 构建今日密码 Widget (4×1) 的 RemoteViews。
+     *
+     *  @param prefs 用户已勾选的地图名集合（来自 UserPreferences.daySecretWidgetVisibleMaps）。
+     *               空集 → 用全部地图按字典序兜底填前 4 个。
+     */
+    fun buildDaySecret(context: Context, payload: WidgetPayload?, prefs: Set<String>): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_day_secret)
+        bindRefreshButton(context, views)
+        bindAccountName(views, payload)
+        bindDaySecretCells(views, pickDaySecretCells(payload, prefs))
+        return views
+    }
+
+    /**
+     * 选格纯函数（与 RemoteViews 解耦，方便纯 JUnit 测试）。
+     *
+     * 返回 List 大小固定为 [MAX_STATIONS]=4，元素可能为 null（"未选"）。
+     *
+     * 规则（spec §3.2）：
+     *  - payload 为空 / daySecrets 为空 → 全部 null
+     *  - prefs 空 → 按 daySecrets 字典序取前 4 个，少于 4 余下 null
+     *  - prefs 非空 → 按 prefs 顺序取 4 个；若某名字不在 daySecrets 里则该位置 null
+     */
+    fun pickDaySecretCells(payload: WidgetPayload?, prefs: Set<String>): List<WidgetPayload.DaySecretEntry?> {
+        val all = payload?.daySecrets ?: emptyList()
+        return if (prefs.isEmpty()) {
+            // 用全部地图按字典序填前 4 个，未填的位置 null
+            val top = all.sortedBy { it.mapName }.take(MAX_STATIONS)
+            top + List(MAX_STATIONS - top.size) { null }
+        } else {
+            // 严格保持 prefs 顺序（linkedSetOf 入参顺序保留）：命中的用 entry，未命中的 null
+            prefs.take(MAX_STATIONS).map { name -> all.firstOrNull { it.mapName == name } }
+                .let { filled -> filled + List(MAX_STATIONS - filled.size) { null } }
+        }
+    }
+
+    private fun bindDaySecretCells(
+        views: RemoteViews,
+        cells: List<WidgetPayload.DaySecretEntry?>,
+    ) {
+        for (i in 0 until MAX_STATIONS) {
+            val entry = cells.getOrNull(i)
+            views.setViewVisibility(rowId(i), android.view.View.VISIBLE)
+            if (entry == null) {
+                views.setTextViewText(mapNameId(i), "未选")
+                views.setTextViewText(secretId(i), "--")
+                views.setTextColor(mapNameId(i), COLOR_TEXT_MUTED)
+                views.setTextColor(secretId(i), COLOR_TEXT_MUTED)
+            } else {
+                views.setTextViewText(mapNameId(i), entry.mapName)
+                views.setTextViewText(secretId(i), entry.secret)
+                views.setTextColor(mapNameId(i), COLOR_TEXT_SECONDARY)
+                views.setTextColor(secretId(i), COLOR_ORANGE)
+            }
+        }
+    }
+
+    private fun mapNameId(i: Int) = when (i) {
+        0 -> R.id.map_name_0
+        1 -> R.id.map_name_1
+        2 -> R.id.map_name_2
+        else -> R.id.map_name_3
+    }
+
+    private fun secretId(i: Int) = when (i) {
+        0 -> R.id.secret_0
+        1 -> R.id.secret_1
+        2 -> R.id.secret_2
+        else -> R.id.secret_3
+    }
+
     private fun bindRefreshButton(context: Context, views: RemoteViews) {
         val intent = Intent(context, WidgetRefreshReceiver::class.java).apply {
             action = WidgetRefreshReceiver.ACTION_REFRESH
