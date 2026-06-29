@@ -1,5 +1,6 @@
 package com.local.dfcraftmonitor.ui.login
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.local.dfcraftmonitor.data.WebSessionCleaner
@@ -60,6 +61,7 @@ class LoginViewModel @Inject constructor(
     }
 
     fun onCookiesHarvested(cookies: Map<String, String>): AmsCredential? {
+        Log.d("LoginViewModel", "onCookiesHarvested called, domains=${cookies.keys}")
         val cookieSource = listOf(
             cookies["pvp.qq.com"].orEmpty(),
             cookies["comm.ams.game.qq.com"].orEmpty(),
@@ -79,11 +81,13 @@ class LoginViewModel @Inject constructor(
             appid = parsed["appid"].orEmpty(),
             accessToken = parsed["access_token"].orEmpty(),
         )
+        Log.d("LoginViewModel", "credential.isComplete()=${credential.isComplete()}, openid=${parsed["openid"].orEmpty().take(8)}, acctype=${parsed["acctype"].orEmpty()}, appid=${parsed["appid"].orEmpty().take(4)}, token=${parsed["access_token"].orEmpty().take(4)}")
         return if (credential.isComplete()) {
             val entry = sessionHolder.set(credential)
             widgetCache.setCurrentAccountId(entry.accountId)
             workScheduler.start()
             _state.value = UiState.LoggedIn
+            Log.d("LoginViewModel", "State set to LoggedIn")
             fetchProfileInBackground(credential, entry.accountId)
             credential
         } else {

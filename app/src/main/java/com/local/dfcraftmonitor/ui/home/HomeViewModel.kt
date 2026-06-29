@@ -68,6 +68,14 @@ class HomeViewModel @Inject constructor(
     val seasonLoading: StateFlow<Boolean> = _seasonLoading.asStateFlow()
 
     init {
+        // 凭据检查：未登录时立刻把 UiState 切到 NotLoggedIn，
+        // 否则初始状态 Loading 会让首页一直显示"正在更新战报"。
+        // MainActivity.onCreate 只在已登录时才会触发 refreshAsync()，
+        // 未登录场景下没有其它代码路径会主动把 UiState 从 Loading 切走。
+        if (sessionHolder.get() == null) {
+            _state.value = UiState.NotLoggedIn
+        }
+
         // VM 创建时不再触发 refresh —— 由 MainActivity.onCreate 调全局控制器，
         // 避免冷启动时两次并发请求（VM init + onCreate）。
         // 订阅全局控制器的结果 SharedFlow 更新 UiState：

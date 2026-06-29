@@ -17,6 +17,8 @@ import android.webkit.CookieManager
  *
  * 纯逻辑：构造接受任意 CookieManager 接口（用接口而不直接持有，便于单测）。
  */
+import android.util.Log
+
 class CookieHarvester(
     private val cookieManager: android.webkit.CookieManager =
         android.webkit.CookieManager.getInstance(),
@@ -39,6 +41,7 @@ class CookieHarvester(
      * 见类注释的判定规则。
      */
     fun isLoginComplete(cookies: Map<String, String>): Boolean {
+        Log.d("CookieHarvester", "isLoginComplete check: ptlogin=${cookies["ptlogin2.qq.com"].orEmpty().take(30)}, df=${cookies["df.qq.com"].orEmpty().take(30)}, game=${cookies["game.qq.com"].orEmpty().take(30)}")
         val ptlogin = cookies["ptlogin2.qq.com"].orEmpty()
         if ("p_skey" in ptloginParseKeys(ptlogin)) return true
 
@@ -51,7 +54,9 @@ class CookieHarvester(
             ";" + cookies["comm.ams.game.qq.com"].orEmpty() +
             ";" + cookies["pvp.qq.com"].orEmpty()
         val amsKeys = ptloginParseKeys(amsCookie)
-        return "openid" in amsKeys && "access_token" in amsKeys
+        val result = "openid" in amsKeys && "access_token" in amsKeys
+        Log.d("CookieHarvester", "isLoginComplete result=$result, amsKeys=$amsKeys")
+        return result
     }
 
     /**

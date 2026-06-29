@@ -20,6 +20,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,8 +67,11 @@ fun LoginScreen(
     var selectedLoginMethod by remember { mutableStateOf(LoginMethod.QQ) }
 
     LaunchedEffect(state) {
+        Log.d("LoginScreen", "LaunchedEffect fired, state=$state")
         if (state is LoginViewModel.UiState.LoggedIn) {
+            Log.d("LoginScreen", "State is LoggedIn, calling onLoggedIn()")
             onLoggedIn()
+            Log.d("LoginScreen", "onLoggedIn() called")
         }
     }
 
