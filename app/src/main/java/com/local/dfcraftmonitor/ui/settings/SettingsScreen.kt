@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PrivacyTip
@@ -102,7 +103,7 @@ fun SettingsScreen(
             item(key = "section-day-secret") { SectionHeader("今日密码 桌面卡") }
             item(key = "row-day-secret") {
                 SettingsRow(
-                    icon = Icons.Outlined.NotificationsActive,
+                    icon = Icons.Outlined.Map,
                     title = "已选地图",
                     subtitle = "桌面 4×1 卡片显示哪些地图密码",
                     onClick = onNavigateToDaySecretPicker,

@@ -106,9 +106,9 @@ fun DaySecretMapPickerContent(
                             )
                             .clickable {
                                 if (entry.mapName in selected) {
-                                    selected = (selected - entry.mapName) as LinkedHashSet<String>
+                                    selected = linkedSetOf<String>().apply { addAll(selected); remove(entry.mapName) }
                                 } else {
-                                    selected = (selected + entry.mapName) as LinkedHashSet<String>
+                                    selected = linkedSetOf<String>().apply { addAll(selected); add(entry.mapName) }
                                 }
                             }
                             .padding(horizontal = 12.dp, vertical = 12.dp),

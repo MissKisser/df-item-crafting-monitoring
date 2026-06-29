@@ -50,6 +50,7 @@ data class WidgetPayload(
             todayProfitText = "--",
             stations = emptyList(),
             fetchedAtEpochMillis = 0L,
+            daySecrets = emptyList(),
         )
     }
 }

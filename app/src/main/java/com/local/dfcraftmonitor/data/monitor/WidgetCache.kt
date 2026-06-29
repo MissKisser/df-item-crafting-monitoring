@@ -1,13 +1,12 @@
 package com.local.dfcraftmonitor.data.monitor
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.local.dfcraftmonitor.data.backend.LocalDashboardData
+import com.local.dfcraftmonitor.data.preference.keyDaySecretWidgetVisibleMaps
+import com.local.dfcraftmonitor.data.preference.userPrefsStore
 import com.local.dfcraftmonitor.data.backend.PlayerProfile
 import com.local.dfcraftmonitor.data.model.CraftingSnapshot
 import com.local.dfcraftmonitor.data.model.CraftingStation
@@ -32,18 +31,12 @@ import javax.inject.Singleton
  */
 private val Context.widgetStore by preferencesDataStore(name = "widget_cache")
 
-/**
- * 直读用户偏好仓库（`user_prefs`）。这是一个**仅读**视图——本文件的 widget 渲染层
- * 不能依赖 data.preference 包（避免循环引用 + 让 widget 包保持可独立测试）。
- *
- * 与 [com.local.dfcraftmonitor.data.preference.UserPreferencesRepository] 的 key
- * 必须保持一致：
- *   - `"day_secret_widget_visible_maps"`
- *
- * 单向写入路径仍由 [com.local.dfcraftmonitor.data.preference.UserPreferencesRepository] 负责。
- */
-private val Context.userPrefsStore by preferencesDataStore(name = "user_prefs")
-private val keyDaySecretWidgetVisibleMapsAlt = stringSetPreferencesKey("day_secret_widget_visible_maps")
+// user_prefs 的 DataStore 委托与 day_secret key 不在本文件声明——统一收敛到
+// data.preference.UserPrefsStore，避免与 UserPreferencesRepository 各开一份同名委托
+// 触发 "multiple DataStores active for the same file"。
+// data.preference 是叶子包（无本仓 import），从 data.monitor 引用不构成循环依赖。
+// 直读 user_prefs 仅为**只读**视图：widget 渲染层只读 daySecretWidgetVisibleMaps，
+// 写入仍由 UserPreferencesRepository 负责。
 
 /**
  * Widget 数据缓存。
@@ -124,7 +117,7 @@ class WidgetCache @Inject constructor(
      */
     fun loadDaySecretPrefs(): Set<String> {
         return runBlocking {
-            context.userPrefsStore.data.first()[keyDaySecretWidgetVisibleMapsAlt] ?: emptySet()
+            context.userPrefsStore.data.first()[keyDaySecretWidgetVisibleMaps] ?: emptySet()
         }
     }
 
@@ -146,6 +139,8 @@ class WidgetCache @Inject constructor(
             todayProfitText = existing?.todayProfitText ?: "--",
             stations = snapshot.stations.map { it.toWidgetStation() },
             fetchedAtEpochMillis = System.currentTimeMillis(),
+            // 周期同步不重新拉取仪表盘，沿用既有 daySecrets；避免后台 15min tick 把卡片清空。
+            daySecrets = existing?.daySecrets ?: emptyList(),
         )
         save(accountId, payload)
     }
