@@ -88,9 +88,11 @@ class WidgetContractSourceTest {
         val craftingInfo = source("app/src/main/res/xml/crafting_detail_widget_info.xml")
         val profitInfo = source("app/src/main/res/xml/today_profit_widget_info.xml")
         val combinedInfo = source("app/src/main/res/xml/combined_widget_info.xml")
+        val daySecretInfo = source("app/src/main/res/xml/day_secret_widget_info.xml")     // 新增
         val craftingLayout = source("app/src/main/res/layout/widget_crafting_detail.xml")
         val combinedLayout = source("app/src/main/res/layout/widget_combined.xml")
         val profitLayout = source("app/src/main/res/layout/widget_today_profit.xml")
+        val daySecretLayout = source("app/src/main/res/layout/widget_day_secret.xml")       // 新增
 
         assertTrue(craftingInfo.contains("android:targetCellWidth=\"4\""))
         assertTrue(craftingInfo.contains("android:targetCellHeight=\"1\""))
@@ -101,24 +103,42 @@ class WidgetContractSourceTest {
         assertTrue(combinedInfo.contains("android:targetCellWidth=\"4\""))
         assertTrue(combinedInfo.contains("android:targetCellHeight=\"2\""))
         assertTrue(combinedInfo.contains("android:initialLayout=\"@layout/widget_combined\""))
+        // 新增：今日密码 4×1
+        assertTrue(daySecretInfo.contains("android:targetCellWidth=\"4\""))
+        assertTrue(daySecretInfo.contains("android:targetCellHeight=\"1\""))
+        assertTrue(daySecretInfo.contains("android:initialLayout=\"@layout/widget_day_secret\""))
+        assertTrue(daySecretInfo.contains("android:configure="))
+
         assertTrue(!craftingInfo.contains("@layout/widget_loading"))
         assertTrue(!profitInfo.contains("@layout/widget_loading"))
         assertTrue(!combinedInfo.contains("@layout/widget_loading"))
+        assertTrue(!daySecretInfo.contains("@layout/widget_loading"))
         assertTrue(craftingInfo.contains("android:updatePeriodMillis=\"900000\""))
         assertTrue(combinedInfo.contains("android:updatePeriodMillis=\"900000\""))
+        assertTrue(daySecretInfo.contains("android:updatePeriodMillis=\"900000\""))
 
-        listOf(craftingLayout, combinedLayout, profitLayout).forEach { layout ->
+        // 新增 daySecretLayout
+        listOf(craftingLayout, combinedLayout, profitLayout, daySecretLayout).forEach { layout ->
             assertTrue("Widget layouts should be pure text RemoteViews surfaces", !layout.contains("<ImageButton"))
             assertTrue("Widget layouts should expose a text refresh target", layout.contains("@+id/btn_refresh"))
         }
 
-        listOf(craftingLayout, combinedLayout).forEach { layout ->
-            assertTrue("Initial widget layout must not be a blank block", layout.contains("待同步"))
-            assertTrue("Initial widget layout must tell the user how to recover data", layout.contains("点刷新") || layout.contains("btn_refresh"))
+        listOf(craftingLayout, combinedLayout, daySecretLayout).forEach { layout ->
+            // 各卡 layout 的初始 placeholder：crafting/combined 用字面值"待同步"，
+            // day_secret 用 @string/widget_day_secret_account_default（同样含义）。
+            assertTrue(
+                "Initial widget layout must not be a blank block",
+                layout.contains("待同步") || layout.contains("widget_day_secret_account_default"),
+            )
+            assertTrue(
+                "Initial widget layout must tell the user how to recover data",
+                layout.contains("点刷新") || layout.contains("btn_refresh") || layout.contains("widget_day_secret_account_default"),
+            )
         }
         assertTrue(craftingLayout.contains("待同步"))
         assertTrue(combinedLayout.contains("待同步"))
         assertTrue(profitLayout.contains("待同步"))
+        assertTrue(daySecretLayout.contains("widget_day_secret_account_default"))
     }
 
     @Test
