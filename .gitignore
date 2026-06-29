@@ -25,6 +25,9 @@ app/libs/
 .omx/drafts/
 .omx/external/        # clone 来的第三方仓库不进入本仓库
 
+# Playwright MCP 调试产物（控制台日志、页面快照等临时文件）
+.playwright-mcp/
+
 # 临时调试产物
 .omx/*.png            # 根目录临时截图
 .omx/*.ps1            # 临时 powershell 脚本
