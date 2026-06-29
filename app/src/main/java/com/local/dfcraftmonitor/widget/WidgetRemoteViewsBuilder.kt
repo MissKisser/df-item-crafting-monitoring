@@ -41,6 +41,12 @@ object WidgetRemoteViewsBuilder {
     private const val COLOR_RED = 0xFFF87171.toInt()
     private const val COLOR_ORANGE = 0xFFFBBF24.toInt()
 
+    /**
+     * "今日密码 卡片" 整体点击 PendingIntent 的稳定 requestCode，
+     * 与 RefreshButton 的 implicit requestCode 区分。
+     */
+    private const val REQUEST_CARD_CLICK = 1001
+
     /** 构建制造详情 Widget (4×1) 的 RemoteViews。 */
     fun buildCraftingDetail(context: Context, payload: WidgetPayload?): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_crafting_detail)
@@ -77,9 +83,31 @@ object WidgetRemoteViewsBuilder {
     fun buildDaySecret(context: Context, payload: WidgetPayload?, prefs: Set<String>): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_day_secret)
         bindRefreshButton(context, views)
+        bindCardClick(context, views)  // 卡片整卡 → 打开 App 首页
         bindAccountName(views, payload)
         bindDaySecretCells(views, pickDaySecretCells(payload, prefs))
         return views
+    }
+
+    /**
+     * 卡片整体点击 → 启动 MainActivity（首页）。
+     * 使用 `getLaunchIntentForPackage` 简单可靠，避免硬编码 ComponentName。
+     */
+    private fun bindCardClick(context: Context, views: RemoteViews) {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            ?: return
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // requestCode 用常量即可——四个 row 共用同一个 PI
+        val pi = PendingIntent.getActivity(
+            context, REQUEST_CARD_CLICK, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        // 4 个 row 都绑同一个 PendingIntent；后绑覆盖前绑（只保留最后一个），
+        // 实际点是用户看到的整张卡上任何位置都触发。
+        views.setOnClickPendingIntent(R.id.row_3, pi)
+        views.setOnClickPendingIntent(R.id.row_2, pi)
+        views.setOnClickPendingIntent(R.id.row_1, pi)
+        views.setOnClickPendingIntent(R.id.row_0, pi)
     }
 
     /**
