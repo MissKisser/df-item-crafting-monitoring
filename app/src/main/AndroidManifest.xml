@@ -77,6 +77,18 @@
                 android:resource="@xml/combined_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".widget.DaySecretWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_day_secret_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/day_secret_widget_info" />
+        </receiver>
+
         <!-- Widget 刷新按钮接收器 -->
         <receiver
             android:name=".widget.WidgetRefreshReceiver"

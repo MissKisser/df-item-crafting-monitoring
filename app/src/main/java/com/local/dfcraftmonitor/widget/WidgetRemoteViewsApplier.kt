@@ -3,6 +3,7 @@ package com.local.dfcraftmonitor.widget
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import com.local.dfcraftmonitor.data.monitor.WidgetCache
 import com.local.dfcraftmonitor.data.monitor.WidgetPayload
 
 /**
@@ -47,9 +48,15 @@ object WidgetRemoteViewsApplier {
         }
 
         val manager = AppWidgetManager.getInstance(context)
+        // 今日密码卡片依赖 user_prefs 里的"已选地图名集合"——这里读一次，下游传 prefs。
+        // 不纳入签名——prefs 变化由 Configure Activity 主动 force=true 触发重建。
+        val prefs: Set<String> = WidgetCache(context).loadDaySecretPrefs()
         updateWidgetsOfClass(manager, context, CraftingDetailWidgetProvider::class.java, payload)
         updateWidgetsOfClass(manager, context, TodayProfitWidgetProvider::class.java, payload)
         updateWidgetsOfClass(manager, context, CombinedWidgetProvider::class.java, payload)
+        updateWidgetsOfClass(
+            manager, context, DaySecretWidgetProvider::class.java, payload, prefs,
+        )
     }
 
     private fun computeSignature(payload: WidgetPayload?): String {
@@ -86,12 +93,18 @@ object WidgetRemoteViewsApplier {
                 (remaining in 1..WidgetRemoteViewsBuilder.LAST_MINUTE_CUTOFF_SECONDS)
             "${station.placeName}#${station.itemName}#$completed"
         }
+        // 今日密码：按 mapName 字典序稳定排序后纳入签名（顺序无关紧要，
+        // 因为 prefs 已单独控制显示位置；这里只关心"哪几个密码变了"）。
+        val secretsSig = payload.daySecrets
+            .sortedBy { it.mapName }
+            .joinToString("|") { "${it.mapName}#${it.secret}" }
         return buildString {
             append(payload.nickname).append('/')
             append(payload.areaName).append('/')
             append(payload.todayProfitValue).append('/')
             append(payload.todayProfitText).append('/')
-            append(stationsSig)
+            append(stationsSig).append('/')
+            append(secretsSig)
         }
     }
 
@@ -100,6 +113,7 @@ object WidgetRemoteViewsApplier {
         context: Context,
         providerClass: Class<out android.appwidget.AppWidgetProvider>,
         payload: WidgetPayload?,
+        prefs: Set<String> = emptySet(),
     ) {
         val ids = manager.getAppWidgetIds(ComponentName(context, providerClass))
         if (ids.isEmpty()) return
@@ -110,6 +124,8 @@ object WidgetRemoteViewsApplier {
                     WidgetRemoteViewsBuilder.buildCraftingDetail(context, payload)
                 TodayProfitWidgetProvider::class.java ->
                     WidgetRemoteViewsBuilder.buildTodayProfit(context, payload)
+                DaySecretWidgetProvider::class.java ->
+                    WidgetRemoteViewsBuilder.buildDaySecret(context, payload, prefs)
                 else ->
                     WidgetRemoteViewsBuilder.buildCombined(context, payload)
             }
