@@ -8,7 +8,7 @@ import org.junit.Test
 class WidgetContractSourceTest {
 
     @Test
-    fun providersExposeCraftingProfitAndCombinedModes() {
+    fun providersExposeCraftingProfitCombinedAndDaySecretModes() {
         val manifest = source("app/src/main/AndroidManifest.xml")
         val updater = source("app/src/main/java/com/local/dfcraftmonitor/widget/WidgetUpdater.kt")
         val applier = source("app/src/main/java/com/local/dfcraftmonitor/widget/WidgetRemoteViewsApplier.kt")
@@ -18,6 +18,7 @@ class WidgetContractSourceTest {
             "CraftingDetailWidgetProvider" to "crafting_detail_widget_info",
             "TodayProfitWidgetProvider" to "today_profit_widget_info",
             "CombinedWidgetProvider" to "combined_widget_info",
+            "DaySecretWidgetProvider" to "day_secret_widget_info",
         ).forEach { (provider, info) ->
             assertTrue("Manifest must register $provider", manifest.contains(provider))
             assertTrue("Manifest must point $provider at $info", manifest.contains("@xml/$info"))
@@ -28,9 +29,25 @@ class WidgetContractSourceTest {
         assertTrue(builder.contains("R.layout.widget_crafting_detail"))
         assertTrue(builder.contains("R.layout.widget_today_profit"))
         assertTrue(builder.contains("R.layout.widget_combined"))
+        assertTrue(builder.contains("R.layout.widget_day_secret"))
         assertTrue(builder.contains("fun buildCraftingDetail"))
         assertTrue(builder.contains("fun buildTodayProfit"))
         assertTrue(builder.contains("fun buildCombined"))
+        assertTrue(builder.contains("fun buildDaySecret"))
+    }
+
+    /**
+     * 今日密码数据契约：daySecrets 序列化器与 widget_update 路径必须有 DaySecretEntry。
+     * 防止"把数据落进缓存但忘记映射"的回归。
+     */
+    @Test
+    fun daySecretEntryIsSerializedAndPropagated() {
+        val payload = source("app/src/main/java/com/local/dfcraftmonitor/data/monitor/WidgetPayload.kt")
+        val cache = source("app/src/main/java/com/local/dfcraftmonitor/data/monitor/WidgetCache.kt")
+        assertTrue(payload.contains("data class DaySecretEntry"))
+        assertTrue(payload.contains("daySecrets: List<DaySecretEntry>"))
+        assertTrue(cache.contains("dashboard.daySecrets"))
+        assertTrue(cache.contains("WidgetPayload.DaySecretEntry"))
     }
 
     @Test
