@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -27,12 +28,14 @@ class UserPreferencesRepository @Inject constructor(
     private val keyCraftingNotificationEnabled = booleanPreferencesKey("crafting_notification_enabled")
     private val keyWelcomeShown = booleanPreferencesKey("welcome_shown")
     private val keyWidgetLockedAccountId = stringPreferencesKey("widget_locked_account_id")
+    private val keyDaySecretWidgetVisibleMaps = stringSetPreferencesKey("day_secret_widget_visible_maps")
 
     val userPreferences: Flow<UserPreferences> = context.prefsStore.data.map { prefs ->
         UserPreferences(
             craftingNotificationEnabled = prefs[keyCraftingNotificationEnabled] ?: true,
             welcomeShown = prefs[keyWelcomeShown] ?: false,
             widgetLockedAccountId = prefs[keyWidgetLockedAccountId],
+            daySecretWidgetVisibleMaps = prefs[keyDaySecretWidgetVisibleMaps] ?: emptySet(),
         )
     }
 
@@ -50,6 +53,20 @@ class UserPreferencesRepository @Inject constructor(
                 prefs[keyWidgetLockedAccountId] = accountId
             } else {
                 prefs.remove(keyWidgetLockedAccountId)
+            }
+        }
+    }
+
+    /**
+     * 设置"今日密码 4×1 桌面卡"显示的地图名集合。
+     * 空集代表"未指定"——Widget 渲染层会用全部地图按字典序兜底显示前 4 个。
+     */
+    suspend fun setDaySecretWidgetVisibleMaps(maps: Set<String>) {
+        context.prefsStore.edit { prefs ->
+            if (maps.isEmpty()) {
+                prefs.remove(keyDaySecretWidgetVisibleMaps)
+            } else {
+                prefs[keyDaySecretWidgetVisibleMaps] = maps
             }
         }
     }
