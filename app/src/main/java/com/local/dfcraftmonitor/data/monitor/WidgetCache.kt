@@ -125,7 +125,7 @@ class WidgetCache @Inject constructor(
     }
 
     /**
-     * 从仪表盘数据更新资料和今日盈亏。
+     * 从仪表盘数据更新资料、今日盈亏、今日密码。
      */
     fun updateFromDashboard(
         accountId: String,
@@ -144,6 +144,8 @@ class WidgetCache @Inject constructor(
             todayProfitText = formatProfit(todayProfit),
             stations = existing?.stations ?: emptyList(),
             fetchedAtEpochMillis = System.currentTimeMillis(),
+            daySecrets = dashboard.daySecrets
+                .map { WidgetPayload.DaySecretEntry(it.mapName, it.secret) },
         )
         save(accountId, payload)
     }
