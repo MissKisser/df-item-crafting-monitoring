@@ -53,6 +53,7 @@ fun SettingsScreen(
     onNavigateToPrivacy: () -> Unit = {},
     onAddAccount: () -> Unit = {},
     onLogout: () -> Unit = {},
+    onNavigateToDaySecretPicker: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val prefs by viewModel.userPreferences.collectAsStateWithLifecycle()
@@ -96,6 +97,15 @@ fun SettingsScreen(
                     title = "添加账号",
                     subtitle = "扫码登录新账号",
                     onClick = onAddAccount,
+                )
+            }
+            item(key = "section-day-secret") { SectionHeader("今日密码 桌面卡") }
+            item(key = "row-day-secret") {
+                SettingsRow(
+                    icon = Icons.Outlined.NotificationsActive,
+                    title = "已选地图",
+                    subtitle = "桌面 4×1 卡片显示哪些地图密码",
+                    onClick = onNavigateToDaySecretPicker,
                 )
             }
             item(key = "section-privacy") { SectionHeader("隐私与安全") }

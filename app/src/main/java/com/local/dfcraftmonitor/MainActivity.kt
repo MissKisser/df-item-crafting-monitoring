@@ -26,6 +26,7 @@ import com.local.dfcraftmonitor.ui.home.HomeScreen
 import com.local.dfcraftmonitor.ui.login.LoginScreen
 import com.local.dfcraftmonitor.ui.login.SessionHolder
 import com.local.dfcraftmonitor.ui.privacy.PrivacyScreen
+import com.local.dfcraftmonitor.ui.settings.DaySecretMapPickerScreen
 import com.local.dfcraftmonitor.ui.settings.SettingsScreen
 import com.local.dfcraftmonitor.ui.theme.DfCraftingTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -73,6 +74,7 @@ private object Routes {
     const val HOME = "home"
     const val SETTINGS = "settings"
     const val PRIVACY = "privacy"
+    const val DAY_SECRET_PICKER = "day_secret_picker"
 }
 
 @androidx.compose.runtime.Composable
@@ -158,6 +160,15 @@ private fun DfNavGraph(
                                 popUpTo(0) { inclusive = true }
                             }
                         },
+                        onNavigateToDaySecretPicker = {
+                            navController.navigate(Routes.DAY_SECRET_PICKER)
+                        },
+                    )
+                }
+                composable(Routes.DAY_SECRET_PICKER) {
+                    DaySecretMapPickerScreen(
+                        title = "今日密码 桌面卡",
+                        onDone = { navController.popBackStack() },
                     )
                 }
                 composable(Routes.PRIVACY) {
@@ -172,6 +183,7 @@ private fun titleFor(route: String): String = when (route) {
     Routes.HOME -> "三角洲助手"
     Routes.SETTINGS -> "设置"
     Routes.PRIVACY -> "隐私声明"
+    Routes.DAY_SECRET_PICKER -> "今日密码配置"
     Routes.LOGIN, Routes.LOGIN_ADD -> "账号绑定"
     else -> "三角洲助手"
 }
