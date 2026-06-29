@@ -1,8 +1,11 @@
 package com.local.dfcraftmonitor.data.monitor
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.local.dfcraftmonitor.data.backend.LocalDashboardData
 import com.local.dfcraftmonitor.data.backend.PlayerProfile
@@ -28,6 +31,19 @@ import javax.inject.Singleton
  * 见 WidgetRefreshReceiver / 各 AppWidgetProvider 会手动 new WidgetCache 的路径。
  */
 private val Context.widgetStore by preferencesDataStore(name = "widget_cache")
+
+/**
+ * 直读用户偏好仓库（`user_prefs`）。这是一个**仅读**视图——本文件的 widget 渲染层
+ * 不能依赖 data.preference 包（避免循环引用 + 让 widget 包保持可独立测试）。
+ *
+ * 与 [com.local.dfcraftmonitor.data.preference.UserPreferencesRepository] 的 key
+ * 必须保持一致：
+ *   - `"day_secret_widget_visible_maps"`
+ *
+ * 单向写入路径仍由 [com.local.dfcraftmonitor.data.preference.UserPreferencesRepository] 负责。
+ */
+private val Context.userPrefsStore by preferencesDataStore(name = "user_prefs")
+private val keyDaySecretWidgetVisibleMapsAlt = stringSetPreferencesKey("day_secret_widget_visible_maps")
 
 /**
  * Widget 数据缓存。
@@ -100,6 +116,16 @@ class WidgetCache @Inject constructor(
     fun loadForWidget(): WidgetPayload? {
         val accountId = resolveAccountId() ?: return null
         return load(accountId)
+    }
+
+    /**
+     * 直读用户偏好的"今日密码 4×1 桌面卡已选地图名集合"。
+     * 空集等价于"未配置"——Widget 渲染层会用全部地图按字典序兜底显示前 4 个。
+     */
+    fun loadDaySecretPrefs(): Set<String> {
+        return runBlocking {
+            context.userPrefsStore.data.first()[keyDaySecretWidgetVisibleMapsAlt] ?: emptySet()
+        }
     }
 
     /**
