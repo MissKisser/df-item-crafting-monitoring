@@ -7,20 +7,32 @@ import org.junit.Test
 class ChromeActionsSourceTest {
 
     @Test
-    fun loginScreenProvidesRefreshActionForWebView() {
+    fun loginScreenReloadsWebViewOnLoginMethodSwitch() {
         val loginScreen = source("ui/login/LoginScreen.kt")
         val loginWebView = source("ui/login/LoginWebView.kt")
 
-        // LoginScreen 当前使用 Outlined Refresh 图标（视觉更轻），
-        // 测试断言需与实现一致。
+        // Bug 1 修复：删除了 LoginScreen 内的"刷新登录页面" IconButton + LoginWebView 的
+        // refreshSignal 形参/状态/更新分支。LoginScreen 现在只渲染 WebView，
+        // 刷新走 GlobalTopBar 右上角按钮。WebView 的 update 块仍保留：QQ ↔ 微信切换时
+        // 重载 URL；初次进入仍由 factory 块 loadUrl。
         assertTrue(
-            "LoginScreen should reference a Refresh icon",
-            loginScreen.contains("Icons.Default.Refresh") ||
-                loginScreen.contains("Icons.Outlined.Refresh"),
+            "LoginScreen should NOT contain a local Refresh icon anymore",
+            !loginScreen.contains("Icons.Outlined.Refresh"),
         )
-        assertTrue(loginScreen.contains("refreshSignal"))
-        assertTrue(loginWebView.contains("refreshSignal:"))
+        assertTrue(
+            "LoginScreen should NOT reference refreshSignal anymore",
+            !loginScreen.contains("refreshSignal"),
+        )
+        assertTrue(
+            "LoginWebView should NOT declare refreshSignal parameter anymore",
+            !loginWebView.contains("refreshSignal:"),
+        )
+        // 验证 WebView 加载行为：factory 块首次 loadUrl + update 块在 loginMethod 切换时 loadUrl。
         assertTrue(loginWebView.contains("webView.loadUrl(initialUrl)"))
+        assertTrue(
+            "LoginWebView update should trigger on loginMethod change",
+            loginWebView.contains("lastLoginMethod != loginMethod"),
+        )
     }
 
     @Test

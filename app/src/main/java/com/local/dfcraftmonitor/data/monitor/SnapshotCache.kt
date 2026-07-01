@@ -18,6 +18,22 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * `snapshot_cache` 的全局 DataStore 委托。
+ *
+ * DataStore 契约：[preferencesDataStore] 的委托**必须**定义在文件顶层（全局单例），
+ * 否则每个 [SnapshotCache] 实例都会为同一个 `snapshot_cache.preferences_pb` 文件
+ * 创建独立的 DataStore，DataStore 启动时会抛
+ * `"There are multiple DataStores active for the same file"`，
+ * 进而导致 Application.onCreate 崩溃、APP 无法启动。
+ *
+ * 当前生产仅 Hilt 注入一个 `@Singleton` 实例，所以暂时不会触发；
+ * 但与 `widget_cache` / `user_prefs` 保持同一模式可避免后续重构/测试/手 new 路径踩雷。
+ */
+private val Context.snapshotStore: DataStore<Preferences> by preferencesDataStore(
+    name = "snapshot_cache",
+)
+
+/**
  * 本地缓存最近一份特勤处快照，专用于"未完成→完成" diff。
  *
  * V1 不存历史、不存主数据（主数据还是 M3 架构里即拉即用）。
@@ -30,10 +46,6 @@ import javax.inject.Singleton
 class SnapshotCache @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : SnapshotStore {
-    private val Context.snapshotStore: DataStore<Preferences> by preferencesDataStore(
-        name = "snapshot_cache",
-    )
-
     private val key = stringPreferencesKey("last_snapshot_v1")
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }

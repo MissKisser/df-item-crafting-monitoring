@@ -26,6 +26,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 桌面 widget 配置入口：Launcher 拖完 widget 后会用此 action 启动 MainActivity，
+                 由 MainActivity 解析 EXTRA_APPWIDGET_ID、注入 WidgetConfigureBridge 引导到
+                 DAY_SECRET_PICKER 路由，保存后 setResult(OK) + finish 完成 pin 流程。 -->
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
         </activity>
 
         <receiver
@@ -110,15 +116,6 @@
                 <data android:scheme="package" />
             </intent-filter>
         </receiver>
-
-        <activity
-            android:name=".widget.DaySecretWidgetConfigureActivity"
-            android:exported="true"
-            android:label="@string/widget_day_secret_configure_title">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
-            </intent-filter>
-        </activity>
 
         <!-- DfApp 实现了 Configuration.Provider 提供 HiltWorkerFactory；
              必须移除 androidx.startup 默认的 WorkManagerInitializer，

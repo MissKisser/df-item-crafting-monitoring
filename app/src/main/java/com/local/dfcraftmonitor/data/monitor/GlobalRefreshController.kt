@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -111,14 +112,39 @@ class GlobalRefreshController @Inject constructor(
                 is SyncOutcome.AuthExpired -> {
                     _outcomes.tryEmit(outcome)
                     _state.value = RefreshState.Failed("登录已失效，请重新绑定账号")
+                    scheduleAutoResetToIdle("登录已失效，请重新绑定账号")
                 }
                 is SyncOutcome.TransientFailure -> {
                     _outcomes.tryEmit(outcome)
                     _state.value = RefreshState.Failed(outcome.reason)
+                    scheduleAutoResetToIdle(outcome.reason)
                 }
             }
         }
         return true
+    }
+
+    /**
+     * Bug 2 修复：Failed 状态 3s 后自动复位为 Idle。
+     *
+     * GlobalTopBar 注释承诺过"3s 后状态机会被 GlobalRefreshController 复位为 Idle
+     * （一次失败不会永久红）"，但实际从未实现——一旦 RefreshState.Failed，红色
+     * 会一直保留到下一次成功 refresh，导致用户长时间看到红色"登录已失效"提示，
+     * 误以为仍然失败。
+     *
+     * 实现要点：
+     *  - 用 equals 比较当前 reason：3s 后只有当失败原因还是当初那个 reason 时才复位，
+     *    避免用户中途触发了新 refresh 而旧 delay 任务误把新状态重置回 Idle。
+     *  - 在 [scope] 上启动，不依赖调用方 lifecycle。
+     */
+    private fun scheduleAutoResetToIdle(reason: String) {
+        scope.launch {
+            delay(FAILED_AUTO_RESET_DELAY_MILLIS)
+            val current = _state.value
+            if (current is RefreshState.Failed && current.reason == reason) {
+                _state.value = RefreshState.Idle
+            }
+        }
     }
 
     /**
@@ -141,6 +167,12 @@ class GlobalRefreshController @Inject constructor(
     companion object {
         /** 默认 300ms 去抖窗口；过短对低端机滚动不友好，过长错过快速反馈。 */
         const val DEFAULT_DEBOUNCE_MILLIS = 300L
+
+        /**
+         * Bug 2 修复：Failed 状态自动复位的延迟。GlobalTopBar 注释里承诺过
+         * "3s 后自动复位"，保持原值以匹配用户预期。
+         */
+        private const val FAILED_AUTO_RESET_DELAY_MILLIS = 3000L
     }
 }
 
